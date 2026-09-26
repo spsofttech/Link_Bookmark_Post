@@ -132,15 +132,18 @@ export class User {
             .all();
 
           return result;
-        } catch (e) {
+        } catch (e: any) {
           console.error("Error creating user in User.createRaw:", e);
-          if (e instanceof SqliteError) {
-            if (e.code === "SQLITE_CONSTRAINT_UNIQUE") {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: "Email is already taken",
-              });
-            }
+          const isUniqueConstraint =
+            (e instanceof SqliteError && e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
+            e?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+            (typeof e?.message === "string" && e.message.includes("UNIQUE constraint failed"));
+
+          if (isUniqueConstraint) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Email is already taken",
+            });
           }
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
