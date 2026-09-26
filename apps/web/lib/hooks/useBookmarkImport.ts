@@ -5,15 +5,11 @@ import { toast } from "@/components/ui/sonner";
 import { useTranslation } from "@/lib/i18n/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { useCreateBookmarkList } from "@karakeep/shared-react/hooks/lists";
 import { useTRPC } from "@karakeep/shared-react/trpc";
 import {
-  importBookmarksFromFile,
   ImportSource,
   parseImportFile,
 } from "@karakeep/shared/import-export";
-
-import { useCreateImportSession } from "./useImportSessions";
 
 export interface ImportProgress {
   done: number;
@@ -30,13 +26,8 @@ export function useBookmarkImport() {
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
-  const { mutateAsync: createImportSession } = useCreateImportSession();
-  const { mutateAsync: createList } = useCreateBookmarkList();
-  const { mutateAsync: stageImportedBookmarks } = useMutation(
-    api.importSessions.stageImportedBookmarks.mutationOptions(),
-  );
-  const { mutateAsync: finalizeImportStaging } = useMutation(
-    api.importSessions.finalizeImportStaging.mutationOptions(),
+  const { mutateAsync: directImportBookmarks } = useMutation(
+    api.bookmarks.directImportBookmarks.mutationOptions(),
   );
   const currentImportIds = useRef(new Map<File, string>());
 
@@ -77,42 +68,38 @@ export function useBookmarkImport() {
         }
       }
 
-      // Proceed with import if quota check passes
-      const result = await importBookmarksFromFile(
-        {
-          file,
-          source,
-          rootListName: t("settings.import.imported_bookmarks"),
-          deps: {
-            createImportSession,
-            createList,
-            stageImportedBookmarks,
-            finalizeImportStaging: async (sessionId: string) => {
-              await finalizeImportStaging({ importSessionId: sessionId });
-            },
-          },
-          onProgress: (id, done, total) => {
-            currentImportIds.current.set(file, id);
-            setImportProgress((prev) => ({ ...prev, [id]: { done, total } }));
-          },
+      // Perform fast, direct database import with 100% data preservation
+      const directResult = await directImportBookmarks({
+        listName: t("settings.import.imported_bookmarks"),
+        bookmarks: parsedImport.bookmarks.map((b) => ({
+          type: (b.content?.type === "text" ? "text" : "link") as "link" | "text",
+          url: b.content?.type === "link" ? b.content.url : undefined,
+          title: b.title,
+          content: b.content?.type === "text" ? b.content.text : undefined,
+          note: b.notes,
+          tags: b.tags ?? [],
+          sourceAddedAt: b.addDate ? new Date(b.addDate * 1000) : undefined,
+          archived: b.archived,
+        })),
+      });
+
+      // Invalidate queries so dashboard and lists update immediately
+      await queryClient.invalidateQueries(api.bookmarks.getBookmarks.queryFilter());
+      await queryClient.invalidateQueries(api.lists.list.queryFilter());
+      await queryClient.invalidateQueries(api.lists.stats.queryFilter());
+
+      return {
+        counts: {
+          successes: directResult.importedCount,
+          failures: 0,
+          alreadyExisted: directResult.skippedCount,
+          total: directResult.total,
         },
-        {
-          // Use a custom parser to avoid re-parsing the file
-          parsers: {
-            [source]: () => parsedImport,
-          },
-        },
-      );
-      return result;
+        rootListId: directResult.rootListId,
+        importSessionId: null,
+      };
     },
     onSuccess: async (result, variables) => {
-      setImportProgress((prev) => {
-        const next = { ...prev };
-        if (result.importSessionId) {
-          delete next[result.importSessionId];
-        }
-        return next;
-      });
       currentImportIds.current.delete(variables.file);
 
       if (result.counts.total === 0) {
@@ -121,7 +108,7 @@ export function useBookmarkImport() {
       }
 
       toast({
-        description: `Staged ${result.counts.total} bookmarks for import. Background processing will start automatically.`,
+        description: `Successfully imported ${result.counts.successes} bookmarks${result.counts.alreadyExisted > 0 ? ` (${result.counts.alreadyExisted} already existed)` : ""}.`,
         variant: "default",
       });
     },

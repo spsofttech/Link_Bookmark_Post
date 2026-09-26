@@ -38,7 +38,15 @@ export function isBookmarkStillCrawling(bookmark: ZBookmark) {
 }
 
 export function isBookmarkStillTagging(bookmark: ZBookmark) {
-  return bookmark.taggingStatus == "pending";
+  if (bookmark.taggingStatus === "pending") {
+    const ageInMs =
+      Date.now().valueOf() - new Date(bookmark.createdAt).valueOf();
+    if (ageInMs > 60 * 1000) {
+      return false;
+    }
+    return true;
+  }
+  return false;
 }
 
 export function isBookmarkStillSummarizing(bookmark: ZBookmark) {

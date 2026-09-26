@@ -12,6 +12,40 @@ import { useTranslation } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import { ExternalLink, NotepadText } from "lucide-react";
 
+export function renderTextWithLinks(text: string) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (part.startsWith("http://") || part.startsWith("https://")) {
+      let url = part;
+      let trailingPunct = "";
+      const match = part.match(/([.,;)]+)$/);
+      if (match) {
+        trailingPunct = match[1];
+        url = part.slice(0, -trailingPunct.length);
+      }
+
+      return (
+        <span key={index}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {url}
+          </a>
+          {trailingPunct}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
 interface NotePreviewProps {
   note: string;
   bookmarkId: string;
@@ -36,13 +70,13 @@ export function NotePreview({ note, bookmarkId, className }: NotePreviewProps) {
           )}
         >
           <NotepadText className="size-5 shrink-0" />
-          <div className="min-w-0 flex-1 truncate">{note}</div>
+          <div className="min-w-0 flex-1 truncate">{renderTextWithLinks(note)}</div>
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-96 max-w-[calc(100vw-2rem)]" align="start">
+      <PopoverContent className="w-96 max-w-[calc(100vw-2rem)] z-[100]" align="start">
         <div className="space-y-3">
           <div className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-300">
-            {note}
+            {renderTextWithLinks(note)}
           </div>
           <div className="flex justify-end">
             <Link href={`/dashboard/preview/${bookmarkId}`}>

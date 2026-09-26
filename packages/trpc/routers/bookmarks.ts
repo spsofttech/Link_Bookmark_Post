@@ -7,7 +7,9 @@ import {
   AssetTypes,
   bookmarkAssets,
   bookmarkLinks,
+  bookmarkLists,
   bookmarks,
+  bookmarksInLists,
   bookmarkTags,
   bookmarkTexts,
   customPrompts,
@@ -238,6 +240,193 @@ async function shouldUseLowPriorityQueues(
 }
 
 export const bookmarksAppRouter = router({
+  directImportBookmarks: bookmarksProcedure
+    .input(
+      z.object({
+        listName: z.string().optional(),
+        bookmarks: z.array(
+          z.object({
+            type: z.enum(["link", "text", "asset"]).default("link"),
+            url: z.string().optional(),
+            title: z.string().optional(),
+            content: z.string().optional(),
+            note: z.string().optional(),
+            tags: z.array(z.string()).default([]),
+            sourceAddedAt: z.date().optional(),
+            archived: z.boolean().optional(),
+          }),
+        ),
+      }),
+    )
+    .output(
+      z.object({
+        importedCount: z.number(),
+        skippedCount: z.number(),
+        total: z.number(),
+        rootListId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user.id;
+      if (input.bookmarks.length === 0) {
+        return { importedCount: 0, skippedCount: 0, total: 0, rootListId: null };
+      }
+
+      // 1. Find or create root list if listName is specified
+      let rootListId: string | null = null;
+      if (input.listName) {
+        const existingList = await ctx.db.query.bookmarkLists.findFirst({
+          where: and(
+            eq(bookmarkLists.userId, userId),
+            eq(bookmarkLists.name, input.listName),
+          ),
+        });
+        if (existingList) {
+          rootListId = existingList.id;
+        } else {
+          const [created] = await ctx.db
+            .insert(bookmarkLists)
+            .values({
+              userId,
+              name: input.listName,
+              icon: "⬆️",
+              type: "manual",
+            })
+            .returning();
+          rootListId = created.id;
+        }
+      }
+
+      // 2. Fetch existing URLs for this user
+      const existingUrls = await ctx.db
+        .select({ url: bookmarkLinks.url })
+        .from(bookmarkLinks)
+        .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
+        .where(eq(bookmarks.userId, userId));
+      const existingUrlSet = new Set(
+        existingUrls.map((l) => l.url.trim().toLowerCase()),
+      );
+
+      // 3. Cache existing tags for this user
+      const existingTags = await ctx.db.query.bookmarkTags.findMany({
+        where: eq(bookmarkTags.userId, userId),
+      });
+      const tagCache = new Map<string, string>();
+      for (const t of existingTags) {
+        tagCache.set(t.name.toLowerCase().trim(), t.id);
+      }
+
+      let importedCount = 0;
+      let skippedCount = 0;
+
+      // 4. Batch insert in transactions of 50 items
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < input.bookmarks.length; i += BATCH_SIZE) {
+        const batch = input.bookmarks.slice(i, i + BATCH_SIZE);
+        await ctx.db.transaction(
+          async (tx) => {
+            for (const item of batch) {
+              const rawUrl = item.url?.trim();
+              if (item.type === "link") {
+                if (!rawUrl) {
+                  if (!item.title && !item.content && !item.note) {
+                    skippedCount++;
+                    continue;
+                  }
+                } else if (existingUrlSet.has(rawUrl.toLowerCase())) {
+                  skippedCount++;
+                  continue;
+                }
+                if (rawUrl) {
+                  existingUrlSet.add(rawUrl.toLowerCase());
+                }
+              }
+
+              const createdAt = item.sourceAddedAt ?? new Date();
+              const cleanTitle = (item.title || rawUrl || "Untitled")
+                .trim()
+                .split("\n")[0]
+                .slice(0, 150);
+
+              const [createdBookmark] = await tx
+                .insert(bookmarks)
+                .values({
+                  userId,
+                  title: cleanTitle,
+                  type:
+                    item.type === "text" || !rawUrl
+                      ? BookmarkTypes.TEXT
+                      : BookmarkTypes.LINK,
+                  note: item.note || undefined,
+                  createdAt,
+                  modifiedAt: createdAt,
+                  source: "import",
+                  taggingStatus: "success",
+                  archived: item.archived ?? false,
+                })
+                .returning();
+
+              if (item.type === "link" && rawUrl) {
+                await tx.insert(bookmarkLinks).values({
+                  id: createdBookmark.id,
+                  url: rawUrl,
+                  title: cleanTitle,
+                  crawlStatus: "pending",
+                  crawlStatusCode: 200,
+                });
+              } else {
+                await tx.insert(bookmarkTexts).values({
+                  id: createdBookmark.id,
+                  text: item.content || item.note || cleanTitle,
+                });
+              }
+
+              if (rootListId) {
+                await tx.insert(bookmarksInLists).values({
+                  bookmarkId: createdBookmark.id,
+                  listId: rootListId,
+                });
+              }
+
+              for (const tagName of item.tags) {
+                const cleanTagName = tagName.trim();
+                if (!cleanTagName) continue;
+                const norm = cleanTagName.toLowerCase();
+                let tagId = tagCache.get(norm);
+                if (!tagId) {
+                  const [newTag] = await tx
+                    .insert(bookmarkTags)
+                    .values({
+                      userId,
+                      name: cleanTagName,
+                    })
+                    .returning();
+                  tagId = newTag.id;
+                  tagCache.set(norm, tagId);
+                }
+
+                await tx.insert(tagsOnBookmarks).values({
+                  bookmarkId: createdBookmark.id,
+                  tagId,
+                  attachedBy: "human",
+                });
+              }
+
+              importedCount++;
+            }
+          },
+          { behavior: "immediate" },
+        );
+      }
+
+      return {
+        importedCount,
+        skippedCount,
+        total: input.bookmarks.length,
+        rootListId,
+      };
+    }),
+
   createBookmark: bookmarksProcedure
     .use(
       createRateLimitMiddleware({

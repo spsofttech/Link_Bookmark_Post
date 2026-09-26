@@ -12,6 +12,7 @@ import {
   bookmarks as bookmarksTable,
 } from "@karakeep/db/schema";
 import {
+  toCsvFormat,
   toExportFormat,
   toExportListFormat,
   toNetscapeFormat,
@@ -94,6 +95,16 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-type": "application/json",
         "Content-disposition": `attachment; filename="karakeep-export-${new Date().toISOString()}.json"`,
+      },
+    });
+  } else if (format === "csv" || format === "excel") {
+    const csvContent = toCsvFormat(bookmarks);
+    const filename = `karakeep-export-${new Date().toISOString().split("T")[0]}.${format === "excel" ? "csv" : "csv"}`;
+    return new Response(csvContent, {
+      status: 200,
+      headers: {
+        "Content-type": format === "excel" ? "application/vnd.ms-excel; charset=utf-8" : "text/csv; charset=utf-8",
+        "Content-disposition": `attachment; filename="${filename}"`,
       },
     });
   } else if (format === "netscape") {

@@ -133,6 +133,34 @@ export default function UploadDropzone({
     setDragging(false);
   };
 
+  React.useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        uploadAssets(imageFiles);
+        setNumUploading(imageFiles.length);
+        toast({ description: `Pasted ${imageFiles.length} image(s). Uploading...` });
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [uploadAssets]);
+
   return (
     <DropZone
       noClick

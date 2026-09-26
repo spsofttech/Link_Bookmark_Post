@@ -25,6 +25,10 @@ import { BookmarkTypes } from "@karakeep/shared/types/bookmarks";
 
 import { useUploadAsset } from "../UploadDropzone";
 
+import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useBookmarkImport } from "@/lib/hooks/useBookmarkImport";
+
 interface MultiUrlImportState {
   urls: URL[];
   text: string;
@@ -33,6 +37,36 @@ interface MultiUrlImportState {
 export default function EditorCard({ className }: { className?: string }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { runUploadBookmarkFile } = useBookmarkImport();
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const filename = file.name.toLowerCase();
+    const source = filename.endsWith(".csv")
+      ? "csv"
+      : filename.endsWith(".xlsx") || filename.endsWith(".xls")
+        ? "excel"
+        : filename.endsWith(".json")
+          ? "json"
+          : "karakeep";
+
+    toast({ description: "Importing bookmarks from file..." });
+    try {
+      await runUploadBookmarkFile({
+        file,
+        source,
+      });
+      toast({ description: "Bookmarks imported successfully!" });
+    } catch (err: any) {
+      toast({
+        description: err.message || "Failed to import file",
+        variant: "destructive",
+      });
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const [multiUrlImportState, setMultiUrlImportState] =
     React.useState<MultiUrlImportState | null>(null);
@@ -195,9 +229,29 @@ export default function EditorCard({ className }: { className?: string }) {
         )}
         onSubmit={form.handleSubmit(onSubmit, onError)}
       >
-        <div className="flex justify-between">
-          <p className="text-sm">{t("editor.new_item")}</p>
-          <Kbd>⌘ + E</Kbd>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{t("editor.new_item")}</p>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".csv,.xlsx,.xls,.json,.html"
+              onChange={handleFileImport}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 gap-1 px-2 text-[11px] font-normal text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import CSV, Excel (.xlsx), or JSON file"
+            >
+              <Upload className="size-3" />
+              <span>Import CSV / Excel / JSON</span>
+            </Button>
+            <Kbd>⌘ + E</Kbd>
+          </div>
         </div>
         <Separator />
         <FormItem className="flex-1">

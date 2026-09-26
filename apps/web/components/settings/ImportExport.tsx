@@ -50,7 +50,7 @@ function ImportCard({
 
 function ExportButton() {
   const { t } = useTranslation();
-  const [format, setFormat] = useState<"json" | "netscape">("json");
+  const [format, setFormat] = useState<"json" | "csv" | "netscape">("json");
   const queryClient = useQueryClient();
   const { isFetching, refetch, error } = useQuery({
     queryKey: ["exportBookmarks"],
@@ -65,7 +65,7 @@ function ExportButton() {
         ?.match(/filename\*?=(?:UTF-8''|")?([^"]+)/i);
       const filename = match
         ? match[1]
-        : `karakeep-export-${new Date().toISOString()}.${format}`;
+        : `karakeep-export-${new Date().toISOString()}.${format === "netscape" ? "html" : "csv"}`;
       return { blob: res.blob(), filename };
     },
     enabled: false,
@@ -104,13 +104,16 @@ function ExportButton() {
           <p>{t("settings.import.export_links_and_notes")}</p>
           <Select
             value={format}
-            onValueChange={(value) => setFormat(value as "json" | "netscape")}
+            onValueChange={(value) =>
+              setFormat(value as "json" | "csv" | "netscape")
+            }
           >
-            <SelectTrigger className="mt-2 w-[180px]">
+            <SelectTrigger className="mt-2 w-[220px]">
               <SelectValue placeholder="Format" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="json">JSON (Karakeep format)</SelectItem>
+              <SelectItem value="json">JSON (Full metadata format)</SelectItem>
+              <SelectItem value="csv">CSV (Excel / Spreadsheet)</SelectItem>
               <SelectItem value="netscape">HTML (Netscape format)</SelectItem>
             </SelectContent>
           </Select>
@@ -146,6 +149,40 @@ export function ImportExportRow() {
         </Alert>
       )}
       <div className="grid gap-4 md:grid-cols-2">
+        <ImportCard
+          text="CSV / Excel Spreadsheet"
+          description="Import links, title, notes, tags & thumb images from CSV or Excel file"
+        >
+          <FilePickerButton
+            size={"sm"}
+            loading={false}
+            accept=".csv,.xlsx,.xls,.txt"
+            multiple={false}
+            className="flex items-center gap-2"
+            onFileSelect={(file) =>
+              runUploadBookmarkFile({ file, source: "csv" })
+            }
+          >
+            <p>Import</p>
+          </FilePickerButton>
+        </ImportCard>
+        <ImportCard
+          text="JSON Data File"
+          description="Import complete content & metadata from any JSON export file"
+        >
+          <FilePickerButton
+            size={"sm"}
+            loading={false}
+            accept=".json"
+            multiple={false}
+            className="flex items-center gap-2"
+            onFileSelect={(file) =>
+              runUploadBookmarkFile({ file, source: "json" })
+            }
+          >
+            <p>Import</p>
+          </FilePickerButton>
+        </ImportCard>
         <ImportCard
           text="HTML File"
           description={t("settings.import.import_bookmarks_from_html_file")}

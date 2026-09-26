@@ -20,9 +20,9 @@ export default function TagList({
 
   if (loading) {
     return (
-      <div className="flex w-full flex-col justify-end space-y-2 p-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
+      <div className="flex items-center gap-1.5 py-0.5">
+        <Skeleton className="h-5 w-14 rounded-md" />
+        <Skeleton className="h-5 w-10 rounded-md" />
       </div>
     );
   }

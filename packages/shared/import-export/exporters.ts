@@ -137,3 +137,58 @@ export function toNetscapeFormat(bookmarks: ZBookmark[]): string {
 
   return `${header}\n${bookmarkEntries}\n${footer}`;
 }
+
+export function toCsvFormat(bookmarks: ZBookmark[]): string {
+  const headers = [
+    "No.",
+    "Title",
+    "Original Post Link",
+    "Description",
+    "Note",
+    "Category",
+    "Status",
+    "Date Saved",
+    "realThumb",
+  ];
+
+  const escapeCsv = (str: string | null | undefined) => {
+    if (!str) return '""';
+    const val = String(str).replace(/"/g, '""');
+    return `"${val}"`;
+  };
+
+  const rows = bookmarks.map((b, idx) => {
+    const url = b.content.type === BookmarkTypes.LINK ? b.content.url : "";
+    const description =
+      b.content.type === BookmarkTypes.LINK
+        ? (b.content.description ?? b.summary ?? "")
+        : "";
+    const title =
+      b.title ??
+      (b.content.type === BookmarkTypes.LINK
+        ? (b.content.title ?? url)
+        : "");
+    const tags = b.tags.map((t) => t.name).join(", ");
+    const note = b.note ?? "";
+    const status = b.archived ? "Archived" : "Saved";
+    const dateSaved = b.createdAt
+      ? b.createdAt.toISOString().split("T")[0]
+      : "";
+    const bannerAsset = b.assets.find((a) => a.assetType === "bannerImage");
+    const realThumb = bannerAsset ? bannerAsset.id : "";
+
+    return [
+      idx + 1,
+      escapeCsv(title),
+      escapeCsv(url),
+      escapeCsv(description),
+      escapeCsv(note),
+      escapeCsv(tags),
+      escapeCsv(status),
+      escapeCsv(dateSaved),
+      escapeCsv(realThumb),
+    ].join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\n");
+}

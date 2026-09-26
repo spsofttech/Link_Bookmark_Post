@@ -19,7 +19,10 @@ export type ImportSource =
   | "mymind"
   | "readwise-reader"
   | "instapaper"
-  | "onetab";
+  | "onetab"
+  | "csv"
+  | "json"
+  | "excel";
 
 export interface ParsedBookmark {
   title: string;
@@ -29,6 +32,7 @@ export interface ParsedBookmark {
   tags: string[];
   addDate?: number;
   notes?: string;
+  description?: string;
   archived?: boolean;
   paths: string[][];
   // Optional list IDs from the source file (used with top-level `lists`).
@@ -660,6 +664,219 @@ function deduplicateBookmarks(bookmarks: ParsedBookmark[]): ParsedBookmark[] {
   return [...deduplicatedBookmarksMap.values(), ...textBookmarks];
 }
 
+function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | null {
+  const rawUrl =
+    record["Original Post Link"] ||
+    record["Extra Link"] ||
+    record["Original Link"] ||
+    record.url ||
+    record.URL ||
+    record.link ||
+    record.href ||
+    record.content?.url ||
+    "";
+  const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
+
+  // Extract clean 1-line title (max 150-200 chars)
+  const takeaway = String(
+    record["Core Idea / 1-Line Takeaway"] || record.takeaway || "",
+  ).trim();
+  const rawLines = takeaway
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const cleanLines = rawLines
+    .map((l) =>
+      l
+        .replace(/^[•\s\-\*“"']+/, "")
+        .replace(/[”"']+$/, "")
+        .trim(),
+    )
+    .filter(Boolean);
+
+  let title = "";
+  if (cleanLines.length > 0) {
+    const first = cleanLines[0];
+    const lower = first.toLowerCase();
+    if (
+      cleanLines.length > 1 &&
+      (lower.includes("carousel") ||
+        lower.includes("slide 1") ||
+        lower.includes("cover") ||
+        lower.includes("overview:"))
+    ) {
+      title = cleanLines[1].slice(0, 150);
+    } else {
+      title = first.slice(0, 150);
+    }
+  }
+
+  if (!title) {
+    const alt =
+      record.title ||
+      record.Title ||
+      record.name ||
+      record.Name ||
+      "";
+    if (alt) {
+      title = String(alt).trim().split("\n")[0].slice(0, 150);
+    }
+  }
+
+  if (!title) {
+    const fallback = `${record.Platform || ""} ${record["Post Type"] || ""}`.trim();
+    title = fallback || url || "Untitled";
+  }
+
+  // Preserve 100% of content and metadata in notes
+  const noteParts: string[] = [];
+  if (takeaway) noteParts.push(takeaway);
+  const existingNote =
+    record.note || record.notes || record.Note || record.Notes || "";
+  if (existingNote && String(existingNote).trim() !== takeaway) {
+    noteParts.push(String(existingNote).trim());
+  }
+  if (record.Platform) noteParts.push(`Platform: ${record.Platform}`);
+  if (record["Post Type"]) noteParts.push(`Post Type: ${record["Post Type"]}`);
+  const extraLink =
+    record["Extra Link"] ||
+    record.extraLink ||
+    record.extra_link ||
+    "";
+  if (extraLink && extraLink !== url) {
+    noteParts.push(`Extra Link: ${extraLink}`);
+  }
+  if (record.Status || record.status) {
+    noteParts.push(`Status: ${record.Status || record.status}`);
+  }
+  if (record["No."] || record.No || record.no) {
+    noteParts.push(`No: ${record["No."] || record.No || record.no}`);
+  }
+  const notes = noteParts.join("\n\n");
+
+  // Extract all tags (Category + Platform)
+  const rawTags =
+    record.Category ||
+    record.category ||
+    record.tags ||
+    record.Tags ||
+    record.Labels ||
+    record.labels ||
+    [];
+  const tags: string[] = [];
+  if (Array.isArray(rawTags)) {
+    for (const t of rawTags) {
+      const s = String(t).trim();
+      if (s && !tags.includes(s)) tags.push(s);
+    }
+  } else if (typeof rawTags === "string") {
+    for (const s of rawTags.split(/[,|;\n]/).map((x) => x.trim()).filter(Boolean)) {
+      if (!tags.includes(s)) tags.push(s);
+    }
+  }
+  if (record.Platform && typeof record.Platform === "string") {
+    const p = record.Platform.trim();
+    if (p && !tags.includes(p)) tags.push(p);
+  }
+
+  const description =
+    record.description ||
+    record.Description ||
+    record.summary ||
+    record.Summary ||
+    "";
+
+  const addDateStr =
+    record["Date Saved"] ||
+    record.dateSaved ||
+    record.createdAt ||
+    record.Date ||
+    record.time_added ||
+    record.addDate;
+
+  let addDate: number | undefined;
+  if (addDateStr) {
+    const parsedMs = Date.parse(String(addDateStr));
+    if (!isNaN(parsedMs)) {
+      addDate = Math.floor(parsedMs / 1000);
+    }
+  }
+
+  const statusStr = String(
+    record.Status || record.status || "",
+  ).toLowerCase();
+  const archived =
+    statusStr === "archived" ||
+    statusStr === "true" ||
+    record.archived === true;
+
+  if (!url && !title && !notes) return null;
+
+  return {
+    title,
+    content: url
+      ? { type: BookmarkTypes.LINK, url }
+      : { type: BookmarkTypes.TEXT, text: notes || title },
+    description,
+    notes,
+    tags,
+    addDate,
+    archived,
+    paths: [],
+  };
+}
+
+function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
+  let records: Record<string, any>[];
+  try {
+    records = parse(textContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true,
+    });
+  } catch (e) {
+    throw new Error(
+      `Failed to parse CSV file. Please ensure it is a valid CSV or Excel export: ${
+        (e as Error).message
+      }`,
+    );
+  }
+
+  const bookmarks: ParsedBookmark[] = [];
+  for (const record of records) {
+    const bookmark = extractUniversalRecord(record);
+    if (bookmark) bookmarks.push(bookmark);
+  }
+
+  return bookmarks;
+}
+
+function parseUniversalJsonFile(textContent: string): ParsedBookmark[] {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(textContent);
+  } catch (e) {
+    throw new Error("Invalid JSON file format.");
+  }
+
+  const records: any[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed.records)
+      ? parsed.records
+      : Array.isArray(parsed.bookmarks)
+        ? parsed.bookmarks
+        : [parsed];
+
+  const bookmarks: ParsedBookmark[] = [];
+  for (const record of records) {
+    const bookmark = extractUniversalRecord(record);
+    if (bookmark) bookmarks.push(bookmark);
+  }
+
+  return bookmarks;
+}
+
 export function parseImportFile(
   source: ImportSource,
   textContent: string,
@@ -674,6 +891,13 @@ export function parseImportFile(
 
   let result: ParsedBookmark[];
   switch (source) {
+    case "csv":
+    case "excel":
+      result = parseUniversalCsvFile(textContent);
+      break;
+    case "json":
+      result = parseUniversalJsonFile(textContent);
+      break;
     case "html":
       result = parseNetscapeBookmarkFile(textContent);
       break;
@@ -703,6 +927,9 @@ export function parseImportFile(
       break;
     case "onetab":
       result = parseOneTabFile(textContent);
+      break;
+    default:
+      result = parseUniversalJsonFile(textContent);
       break;
   }
   return { bookmarks: deduplicateBookmarks(result), lists: [] };

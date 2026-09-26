@@ -65,12 +65,17 @@ class LitequeQueueWrapper<T> implements Queue<T> {
 class LitequeQueueClient implements QueueClient {
   private db = buildDBClient(path.join(serverConfig.dataDir, "queue.db"), {
     walEnabled: serverConfig.database.walMode,
+    runMigrations: true,
   });
 
   private queues = new Map<string, LitequeQueueWrapper<unknown>>();
+  private prepared = false;
 
   async prepare(): Promise<void> {
-    migrateDB(this.db);
+    if (!this.prepared) {
+      migrateDB(this.db);
+      this.prepared = true;
+    }
   }
 
   async start(): Promise<void> {
@@ -78,6 +83,7 @@ class LitequeQueueClient implements QueueClient {
   }
 
   createQueue<T>(name: string, options: QueueOptions): Queue<T> {
+    this.prepare();
     const existing = this.queues.get(name);
     if (existing) {
       if (!queueOptionsEqual(existing.opts, options)) {

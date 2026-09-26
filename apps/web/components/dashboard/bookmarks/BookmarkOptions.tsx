@@ -128,6 +128,9 @@ export default function BookmarkOptions({ bookmark }: { bookmark: ZBookmark }) {
     useState(false);
   const [isTextEditorOpen, setTextEditorOpen] = useState(false);
   const [isEditBookmarkDialogOpen, setEditBookmarkDialogOpen] = useState(false);
+  const [initialEditField, setInitialEditField] = useState<
+    "image" | "title" | "url" | "description" | null
+  >(null);
 
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,7 +262,10 @@ export default function BookmarkOptions({ bookmark }: { bookmark: ZBookmark }) {
       icon: <Pencil className="mr-2 size-4" />,
       visible: isOwner,
       disabled: false,
-      onClick: () => setEditBookmarkDialogOpen(true),
+      onClick: () => {
+        setInitialEditField(null);
+        setEditBookmarkDialogOpen(true);
+      },
     },
     {
       id: "open-editor",
@@ -482,6 +488,7 @@ export default function BookmarkOptions({ bookmark }: { bookmark: ZBookmark }) {
         bookmark={bookmark}
         open={isEditBookmarkDialogOpen}
         setOpen={setEditBookmarkDialogOpen}
+        initialFocusField={initialEditField}
       />
       <DeleteBookmarkConfirmationDialog
         bookmark={bookmark}

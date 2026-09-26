@@ -7,6 +7,7 @@ import NextAuth, {
   NextAuthOptions,
 } from "next-auth";
 import { Adapter as NextAuthAdapater } from "next-auth/adapters";
+import { decode as defaultJwtDecode } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Provider } from "next-auth/providers/index";
 import requestIp from "request-ip";
@@ -216,11 +217,22 @@ if (oauth.wellKnownUrl) {
 }
 
 export const authOptions: NextAuthOptions = {
+  secret: serverConfig.signingSecret(),
   // https://github.com/nextauthjs/next-auth/issues/9493
   adapter: CustomProvider() as NextAuthAdapater,
   providers: providers,
   session: {
     strategy: "jwt",
+  },
+  jwt: {
+    async decode(params) {
+      if (!params.token) return null;
+      try {
+        return await defaultJwtDecode(params);
+      } catch {
+        return null;
+      }
+    },
   },
   pages: {
     signIn: "/signin",
