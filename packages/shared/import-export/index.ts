@@ -6,4 +6,4 @@ export type {
   ParsedImportFile,
   ParsedImportList,
 } from "./parsers";
-export { parseImportFile } from "./parsers";
+export { parseImportFile, parseUniversalExcelBuffer } from "./parsers";

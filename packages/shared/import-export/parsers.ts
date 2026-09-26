@@ -3,6 +3,7 @@
 import type { AnyNode } from "domhandler";
 import * as cheerio from "cheerio";
 import { parse } from "csv-parse/sync";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 
 import { BookmarkTypes } from "../types/bookmarks";
@@ -34,6 +35,9 @@ export interface ParsedBookmark {
   notes?: string;
   description?: string;
   archived?: boolean;
+  favourited?: boolean;
+  imageUrl?: string;
+  lists?: string[];
   paths: string[][];
   // Optional list IDs from the source file (used with top-level `lists`).
   listExternalIds?: string[];
@@ -227,6 +231,19 @@ function parseKarakeepBookmarkFile(textContent: string): ParsedImportFile {
       tags: bookmark.tags,
       addDate: bookmark.createdAt,
       notes: bookmark.note ?? undefined,
+      description:
+        bookmark.description ??
+        (bookmark.content?.type === BookmarkTypes.LINK
+          ? bookmark.content.description
+          : undefined) ??
+        undefined,
+      favourited: bookmark.favourited,
+      imageUrl:
+        bookmark.imageUrl ??
+        (bookmark.content?.type === BookmarkTypes.LINK
+          ? bookmark.content.imageUrl
+          : undefined) ??
+        undefined,
       archived: bookmark.archived,
       paths: [],
       listExternalIds: (bookmark.lists ?? []).filter((listId) =>
@@ -616,68 +633,55 @@ function parseOneTabFile(textContent: string): ParsedBookmark[] {
 }
 
 function deduplicateBookmarks(bookmarks: ParsedBookmark[]): ParsedBookmark[] {
-  const deduplicatedBookmarksMap = new Map<string, ParsedBookmark>();
-  const textBookmarks: ParsedBookmark[] = [];
+  const seen = new Set<string>();
+  const result: ParsedBookmark[] = [];
 
   for (const bookmark of bookmarks) {
-    if (bookmark.content?.type === BookmarkTypes.LINK) {
-      const url = bookmark.content.url;
-      if (deduplicatedBookmarksMap.has(url)) {
-        const existing = deduplicatedBookmarksMap.get(url)!;
-        // Merge tags
-        existing.tags = [...new Set([...existing.tags, ...bookmark.tags])];
-        // Merge paths
-        existing.paths = [...existing.paths, ...bookmark.paths];
-        if (existing.listExternalIds || bookmark.listExternalIds) {
-          existing.listExternalIds = [
-            ...new Set([
-              ...(existing.listExternalIds ?? []),
-              ...(bookmark.listExternalIds ?? []),
-            ]),
-          ];
-        }
-        const existingDate = existing.addDate ?? Infinity;
-        const newDate = bookmark.addDate ?? Infinity;
-        if (newDate < existingDate) {
-          existing.addDate = bookmark.addDate;
-        }
-        // Append notes if both exist
-        if (existing.notes && bookmark.notes) {
-          existing.notes = `${existing.notes}\n---\n${bookmark.notes}`;
-        } else if (bookmark.notes) {
-          existing.notes = bookmark.notes;
-        }
-        // For archived status, prefer archived if either is archived
-        if (bookmark.archived === true) {
-          existing.archived = true;
-        }
-        // Title: keep existing one for simplicity
-      } else {
-        deduplicatedBookmarksMap.set(url, bookmark);
-      }
-    } else {
-      // Keep text bookmarks as they are (no URL to dedupe on)
-      textBookmarks.push(bookmark);
+    const url = bookmark.content?.type === BookmarkTypes.LINK ? bookmark.content.url : "";
+    const key = `${url}::${bookmark.title}::${bookmark.notes ?? ""}::${bookmark.tags.join(",")}`;
+    if (seen.has(key)) {
+      continue;
     }
+    seen.add(key);
+    result.push(bookmark);
   }
 
-  return [...deduplicatedBookmarksMap.values(), ...textBookmarks];
+  return result;
 }
 
 function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | null {
+  if (!record || typeof record !== "object") return null;
+
+  // 1. Extract URL
   const rawUrl =
+    record["Original Post Link / URL"] ||
     record["Original Post Link"] ||
-    record["Extra Link"] ||
+    record["Post Link"] ||
     record["Original Link"] ||
     record.url ||
     record.URL ||
     record.link ||
+    record.Link ||
     record.href ||
+    record.website ||
     record.content?.url ||
     "";
   const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
 
-  // Extract clean 1-line title (max 150-200 chars)
+  // 2. Extract Text Content (for text notes / posts)
+  const rawText =
+    record["Text Content"] ||
+    record["text content"] ||
+    record.content?.text ||
+    record.textContent ||
+    record.text ||
+    record.Text ||
+    record.body ||
+    record.post ||
+    "";
+  const textContent = typeof rawText === "string" ? rawText.trim() : "";
+
+  // 3. Extract 1-line title
   const takeaway = String(
     record["Core Idea / 1-Line Takeaway"] || record.takeaway || "",
   ).trim();
@@ -695,71 +699,79 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     .filter(Boolean);
 
   let title = "";
-  if (cleanLines.length > 0) {
-    const first = cleanLines[0];
-    const lower = first.toLowerCase();
-    if (
-      cleanLines.length > 1 &&
-      (lower.includes("carousel") ||
-        lower.includes("slide 1") ||
-        lower.includes("cover") ||
-        lower.includes("overview:"))
-    ) {
-      title = cleanLines[1].slice(0, 150);
-    } else {
-      title = first.slice(0, 150);
-    }
+  if (record.title || record.Title || record.name || record.Name || record.Subject || record.headline) {
+    const rawTitle = record.title || record.Title || record.name || record.Name || record.Subject || record.headline;
+    title = String(rawTitle).trim().split("\n")[0].slice(0, 200);
+  } else if (cleanLines.length > 0) {
+    title = cleanLines[0].slice(0, 200);
+  } else if (textContent) {
+    title = textContent.split("\n")[0].slice(0, 200);
+  } else if (url) {
+    title = url;
+  } else {
+    title = "Untitled";
   }
 
-  if (!title) {
-    const alt =
-      record.title ||
-      record.Title ||
-      record.name ||
-      record.Name ||
-      "";
-    if (alt) {
-      title = String(alt).trim().split("\n")[0].slice(0, 150);
-    }
-  }
+  // 4. Extract Description
+  const description = String(
+    record.description ||
+      record.Description ||
+      record.summary ||
+      record.Summary ||
+      record.Snippet ||
+      record.content?.description ||
+      "",
+  ).trim();
 
-  if (!title) {
-    const fallback = `${record.Platform || ""} ${record["Post Type"] || ""}`.trim();
-    title = fallback || url || "Untitled";
-  }
+  // 5. Extract Notes and ALL extra raw columns without loss
+  const standardFields = new Set([
+    "no.", "no", "id", "type", "title", "name", "headline", "subject",
+    "url", "link", "original post link", "original post link / url", "original link", "post link", "href", "website",
+    "text content", "text", "body", "post", "content", "textcontent",
+    "description", "desc", "summary", "snippet",
+    "note", "notes", "note / takeaways", "takeaway", "core idea / 1-line takeaway", "comments",
+    "tags", "tags / categories", "category", "categories", "labels", "platform", "post type",
+    "status", "archived", "state",
+    "favourited", "favorite", "starred", "star",
+    "date saved", "date", "createdat", "created at", "time_added", "adddate",
+    "thumbnail", "realthumb", "image", "imageurl", "thumb",
+    "lists", "list", "folder", "paths"
+  ]);
 
-  // Preserve 100% of content and metadata in notes
   const noteParts: string[] = [];
-  if (takeaway) noteParts.push(takeaway);
-  const existingNote =
-    record.note || record.notes || record.Note || record.Notes || "";
-  if (existingNote && String(existingNote).trim() !== takeaway) {
-    noteParts.push(String(existingNote).trim());
-  }
-  if (record.Platform) noteParts.push(`Platform: ${record.Platform}`);
-  if (record["Post Type"]) noteParts.push(`Post Type: ${record["Post Type"]}`);
-  const extraLink =
-    record["Extra Link"] ||
-    record.extraLink ||
-    record.extra_link ||
+  const baseNote =
+    record["Note / Takeaways"] ||
+    record.note ||
+    record.notes ||
+    record.Note ||
+    record.Notes ||
     "";
-  if (extraLink && extraLink !== url) {
-    noteParts.push(`Extra Link: ${extraLink}`);
+  if (baseNote) {
+    noteParts.push(String(baseNote).trim());
   }
-  if (record.Status || record.status) {
-    noteParts.push(`Status: ${record.Status || record.status}`);
+  if (takeaway && !baseNote.toString().includes(takeaway)) {
+    noteParts.push(takeaway);
   }
-  if (record["No."] || record.No || record.no) {
-    noteParts.push(`No: ${record["No."] || record.No || record.no}`);
+
+  // Capture every single remaining raw column without loss
+  for (const [key, val] of Object.entries(record)) {
+    if (val === null || val === undefined || val === "") continue;
+    const cleanKey = key.trim().toLowerCase();
+    if (!standardFields.has(cleanKey)) {
+      const displayVal = typeof val === "object" ? JSON.stringify(val) : String(val).trim();
+      noteParts.push(`${key.trim()}: ${displayVal}`);
+    }
   }
+
   const notes = noteParts.join("\n\n");
 
-  // Extract all tags (Category + Platform)
+  // 6. Extract Tags
   const rawTags =
-    record.Category ||
-    record.category ||
+    record["Tags / Categories"] ||
     record.tags ||
     record.Tags ||
+    record.Category ||
+    record.category ||
     record.Labels ||
     record.labels ||
     [];
@@ -779,13 +791,28 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     if (p && !tags.includes(p)) tags.push(p);
   }
 
-  const description =
-    record.description ||
-    record.Description ||
-    record.summary ||
-    record.Summary ||
-    "";
+  // 7. Extract Lists / Folders
+  const rawLists =
+    record.Lists ||
+    record.lists ||
+    record.List ||
+    record.list ||
+    record.Folder ||
+    record.folder ||
+    [];
+  const lists: string[] = [];
+  if (Array.isArray(rawLists)) {
+    for (const l of rawLists) {
+      const s = String(l).trim();
+      if (s && !lists.includes(s)) lists.push(s);
+    }
+  } else if (typeof rawLists === "string") {
+    for (const s of rawLists.split(/[,|;\n]/).map((x) => x.trim()).filter(Boolean)) {
+      if (!lists.includes(s)) lists.push(s);
+    }
+  }
 
+  // 8. Date
   const addDateStr =
     record["Date Saved"] ||
     record.dateSaved ||
@@ -793,37 +820,103 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     record.Date ||
     record.time_added ||
     record.addDate;
-
   let addDate: number | undefined;
-  if (addDateStr) {
-    const parsedMs = Date.parse(String(addDateStr));
-    if (!isNaN(parsedMs)) {
-      addDate = Math.floor(parsedMs / 1000);
+  if (addDateStr !== undefined && addDateStr !== null && addDateStr !== "") {
+    if (typeof addDateStr === "number") {
+      addDate = addDateStr > 1e11 ? Math.floor(addDateStr / 1000) : Math.floor(addDateStr);
+    } else {
+      const num = Number(addDateStr);
+      if (!isNaN(num) && num > 1e8) {
+        addDate = num > 1e11 ? Math.floor(num / 1000) : Math.floor(num);
+      } else {
+        const parsedMs = Date.parse(String(addDateStr));
+        if (!isNaN(parsedMs)) {
+          addDate = Math.floor(parsedMs / 1000);
+        }
+      }
     }
   }
 
+  // 9. Archived / Status
   const statusStr = String(
     record.Status || record.status || "",
   ).toLowerCase();
   const archived =
     statusStr === "archived" ||
     statusStr === "true" ||
-    record.archived === true;
+    record.archived === true ||
+    record.Archived === true;
 
-  if (!url && !title && !notes) return null;
+  // 10. Favourited
+  const favStr = String(
+    record.Favourited || record.favourited || record.Favorite || record.favorite || record.Starred || record.starred || "",
+  ).toLowerCase();
+  const favourited =
+    favStr === "yes" ||
+    favStr === "true" ||
+    favStr === "1" ||
+    record.favourited === true ||
+    record.Favourited === true;
+
+  // 11. Thumbnail / Image
+  const rawImage =
+    record.Thumbnail ||
+    record.thumbnail ||
+    record.realThumb ||
+    record.imageUrl ||
+    record.image ||
+    record.content?.imageUrl ||
+    "";
+  const imageUrl = typeof rawImage === "string" ? rawImage.trim() : undefined;
+
+  if (!url && !textContent && !title && !notes) return null;
 
   return {
     title,
     content: url
       ? { type: BookmarkTypes.LINK, url }
-      : { type: BookmarkTypes.TEXT, text: notes || title },
+      : { type: BookmarkTypes.TEXT, text: textContent || notes || title },
     description,
     notes,
     tags,
+    lists,
     addDate,
     archived,
+    favourited,
+    imageUrl,
     paths: [],
   };
+}
+
+export function parseUniversalExcelBuffer(
+  buffer: ArrayBuffer | Uint8Array,
+): ParsedImportFile {
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  } catch (e) {
+    throw new Error(
+      `Failed to parse Excel file (.xlsx/.xls): ${(e as Error).message}`,
+    );
+  }
+
+  const allBookmarks: ParsedBookmark[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+    const records = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+      defval: "",
+      raw: false,
+    });
+    for (const record of records) {
+      const bookmark = extractUniversalRecord(record);
+      if (bookmark) {
+        allBookmarks.push(bookmark);
+      }
+    }
+  }
+
+  return { bookmarks: allBookmarks, lists: [] };
 }
 
 function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
@@ -836,11 +929,16 @@ function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
       relax_column_count: true,
     });
   } catch (e) {
-    throw new Error(
-      `Failed to parse CSV file. Please ensure it is a valid CSV or Excel export: ${
-        (e as Error).message
-      }`,
-    );
+    // Fallback: try parsing with XLSX
+    try {
+      const workbook = XLSX.read(textContent, { type: "string" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      records = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet, { defval: "" });
+    } catch {
+      throw new Error(
+        `Failed to parse CSV file: ${(e as Error).message}`,
+      );
+    }
   }
 
   const bookmarks: ParsedBookmark[] = [];
@@ -862,10 +960,10 @@ function parseUniversalJsonFile(textContent: string): ParsedBookmark[] {
 
   const records: any[] = Array.isArray(parsed)
     ? parsed
-    : Array.isArray(parsed.records)
-      ? parsed.records
-      : Array.isArray(parsed.bookmarks)
-        ? parsed.bookmarks
+    : Array.isArray(parsed.bookmarks)
+      ? parsed.bookmarks
+      : Array.isArray(parsed.records)
+        ? parsed.records
         : [parsed];
 
   const bookmarks: ParsedBookmark[] = [];
@@ -883,21 +981,32 @@ export function parseImportFile(
 ): ParsedImportFile {
   if (source === "karakeep") {
     const parsed = parseKarakeepBookmarkFile(textContent);
-    return {
-      bookmarks: deduplicateBookmarks(parsed.bookmarks),
-      lists: parsed.lists,
-    };
+    return parsed;
   }
 
   let result: ParsedBookmark[];
   switch (source) {
     case "csv":
-    case "excel":
       result = parseUniversalCsvFile(textContent);
-      break;
+      return { bookmarks: result, lists: [] };
+    case "excel":
+      try {
+        const workbook = XLSX.read(textContent, { type: "string" });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const records = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet, { defval: "" });
+        result = records.map(extractUniversalRecord).filter((b): b is ParsedBookmark => b !== null);
+      } catch {
+        result = parseUniversalCsvFile(textContent);
+      }
+      return { bookmarks: result, lists: [] };
     case "json":
-      result = parseUniversalJsonFile(textContent);
-      break;
+      try {
+        const parsed = parseKarakeepBookmarkFile(textContent);
+        return parsed;
+      } catch {
+        result = parseUniversalJsonFile(textContent);
+        return { bookmarks: result, lists: [] };
+      }
     case "html":
       result = parseNetscapeBookmarkFile(textContent);
       break;
@@ -930,7 +1039,7 @@ export function parseImportFile(
       break;
     default:
       result = parseUniversalJsonFile(textContent);
-      break;
+      return { bookmarks: result, lists: [] };
   }
   return { bookmarks: deduplicateBookmarks(result), lists: [] };
 }

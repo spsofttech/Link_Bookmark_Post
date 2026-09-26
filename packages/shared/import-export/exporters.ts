@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { z } from "zod";
 
 import { BookmarkTypes, ZBookmark } from "../types/bookmarks";
@@ -16,6 +17,7 @@ export const zExportListSchema = z.object({
 });
 
 export const zExportBookmarkSchema = z.object({
+  id: z.string().optional(),
   createdAt: z.number(),
   title: z.string().nullable(),
   tags: z.array(z.string()),
@@ -25,15 +27,28 @@ export const zExportBookmarkSchema = z.object({
       z.object({
         type: z.literal(BookmarkTypes.LINK),
         url: z.string(),
+        description: z.string().nullable().optional(),
+        imageUrl: z.string().nullable().optional(),
+        favicon: z.string().nullable().optional(),
+        author: z.string().nullable().optional(),
+        publisher: z.string().nullable().optional(),
       }),
       z.object({
         type: z.literal(BookmarkTypes.TEXT),
         text: z.string(),
       }),
+      z.object({
+        type: z.literal(BookmarkTypes.ASSET),
+        assetId: z.string().optional(),
+      }),
     ])
     .nullable(),
+  description: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
   note: z.string().nullable(),
   archived: z.boolean().optional().default(false),
+  favourited: z.boolean().optional().default(false),
+  imageUrl: z.string().nullable().optional(),
 });
 
 export const zExportSchema = z.object({
@@ -49,23 +64,47 @@ export function toExportFormat(
   switch (bookmark.content.type) {
     case BookmarkTypes.LINK: {
       content = {
-        type: bookmark.content.type,
+        type: BookmarkTypes.LINK as const,
         url: bookmark.content.url,
+        description: bookmark.content.description ?? null,
+        imageUrl: bookmark.content.imageUrl ?? null,
+        favicon: bookmark.content.favicon ?? null,
+        author: bookmark.content.author ?? null,
+        publisher: bookmark.content.publisher ?? null,
       };
       break;
     }
     case BookmarkTypes.TEXT: {
       content = {
-        type: bookmark.content.type,
+        type: BookmarkTypes.TEXT as const,
         text: bookmark.content.text,
       };
       break;
     }
-    // Exclude asset types for now
+    case BookmarkTypes.ASSET: {
+      content = {
+        type: BookmarkTypes.ASSET as const,
+        assetId: (bookmark.content as any).assetId ?? (bookmark.content as any).id,
+      };
+      break;
+    }
+    default: {
+      content = {
+        type: BookmarkTypes.LINK as const,
+        url: (bookmark.content as any).url || "",
+      };
+      break;
+    }
   }
+
+  const bannerAsset = bookmark.assets?.find((a) => a.assetType === "bannerImage");
+  const imageUrl =
+    bookmark.content.type === BookmarkTypes.LINK
+      ? (bookmark.content.imageUrl ?? (bannerAsset ? bannerAsset.id : null))
+      : (bannerAsset ? bannerAsset.id : null);
+
   return {
-    // Deliberately the last saved date rather than `firstCreatedAt`, so that
-    // re-importing an export preserves the ordering the user sees in the app.
+    id: bookmark.id,
     createdAt: Math.floor(bookmark.createdAt.getTime() / 1000),
     title:
       bookmark.title ??
@@ -75,8 +114,15 @@ export function toExportFormat(
     tags: bookmark.tags.map((t) => t.name),
     lists: listIds ?? [],
     content,
+    description:
+      bookmark.content.type === BookmarkTypes.LINK
+        ? (bookmark.content.description ?? null)
+        : null,
+    summary: bookmark.summary ?? null,
     note: bookmark.note ?? null,
     archived: bookmark.archived,
+    favourited: bookmark.favourited ?? false,
+    imageUrl,
   };
 }
 
@@ -138,57 +184,162 @@ export function toNetscapeFormat(bookmarks: ZBookmark[]): string {
   return `${header}\n${bookmarkEntries}\n${footer}`;
 }
 
-export function toCsvFormat(bookmarks: ZBookmark[]): string {
-  const headers = [
-    "No.",
-    "Title",
-    "Original Post Link",
-    "Description",
-    "Note",
-    "Category",
-    "Status",
-    "Date Saved",
-    "realThumb",
+export function toExcelFormat(
+  bookmarks: ZBookmark[],
+  bookmarkListNamesMap?: Map<string, string[]>,
+): Uint8Array {
+  const data = bookmarks.map((b, idx) => {
+    const content = b.content;
+    let url = "";
+    let textContent = "";
+    let description = b.summary ?? "";
+    let defaultTitle = "";
+    let thumbUrl = "";
+
+    if (content.type === BookmarkTypes.LINK) {
+      url = content.url;
+      description = content.description ?? b.summary ?? "";
+      defaultTitle = content.title ?? url;
+      thumbUrl = content.imageUrl ?? "";
+    } else if (content.type === BookmarkTypes.TEXT) {
+      textContent = content.text;
+      defaultTitle = content.text.slice(0, 100);
+    }
+
+    if (!thumbUrl) {
+      const bannerAsset = b.assets?.find((a) => a.assetType === "bannerImage");
+      if (bannerAsset) {
+        thumbUrl = bannerAsset.id;
+      }
+    }
+
+    const title = b.title ?? defaultTitle;
+    const tags = b.tags.map((t) => t.name).join(", ");
+    const lists = bookmarkListNamesMap?.get(b.id)?.join(", ") ?? "";
+    const note = b.note ?? "";
+    const status = b.archived ? "Archived" : "Saved";
+    const favourited = b.favourited ? "Yes" : "No";
+    const dateSaved = b.createdAt ? b.createdAt.toISOString() : "";
+
+    return {
+      "No.": idx + 1,
+      ID: b.id,
+      Type: b.content.type,
+      Title: title,
+      "Original Post Link / URL": url,
+      "Text Content": textContent,
+      Description: description,
+      "Note / Takeaways": note,
+      "Tags / Categories": tags,
+      Lists: lists,
+      Status: status,
+      Favourited: favourited,
+      "Date Saved": dateSaved,
+      Thumbnail: thumbUrl,
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  worksheet["!cols"] = [
+    { wch: 6 },
+    { wch: 28 },
+    { wch: 8 },
+    { wch: 35 },
+    { wch: 45 },
+    { wch: 40 },
+    { wch: 40 },
+    { wch: 40 },
+    { wch: 25 },
+    { wch: 20 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 22 },
+    { wch: 30 },
   ];
 
-  const escapeCsv = (str: string | null | undefined) => {
-    if (!str) return '""';
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Bookmarks");
+  return XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }) as Uint8Array;
+}
+
+export function toCsvFormat(
+  bookmarks: ZBookmark[],
+  bookmarkListNamesMap?: Map<string, string[]>,
+): string {
+  const headers = [
+    "No.",
+    "ID",
+    "Type",
+    "Title",
+    "Original Post Link / URL",
+    "Text Content",
+    "Description",
+    "Note / Takeaways",
+    "Tags / Categories",
+    "Lists",
+    "Status",
+    "Favourited",
+    "Date Saved",
+    "Thumbnail",
+  ];
+
+  const escapeCsv = (str: any) => {
+    if (str === null || str === undefined) return '""';
     const val = String(str).replace(/"/g, '""');
     return `"${val}"`;
   };
 
   const rows = bookmarks.map((b, idx) => {
-    const url = b.content.type === BookmarkTypes.LINK ? b.content.url : "";
-    const description =
-      b.content.type === BookmarkTypes.LINK
-        ? (b.content.description ?? b.summary ?? "")
-        : "";
-    const title =
-      b.title ??
-      (b.content.type === BookmarkTypes.LINK
-        ? (b.content.title ?? url)
-        : "");
+    const content = b.content;
+    let url = "";
+    let textContent = "";
+    let description = b.summary ?? "";
+    let defaultTitle = "";
+    let thumbUrl = "";
+
+    if (content.type === BookmarkTypes.LINK) {
+      url = content.url;
+      description = content.description ?? b.summary ?? "";
+      defaultTitle = content.title ?? url;
+      thumbUrl = content.imageUrl ?? "";
+    } else if (content.type === BookmarkTypes.TEXT) {
+      textContent = content.text;
+      defaultTitle = content.text.slice(0, 100);
+    }
+
+    if (!thumbUrl) {
+      const bannerAsset = b.assets?.find((a) => a.assetType === "bannerImage");
+      if (bannerAsset) {
+        thumbUrl = bannerAsset.id;
+      }
+    }
+
+    const title = b.title ?? defaultTitle;
     const tags = b.tags.map((t) => t.name).join(", ");
+    const lists = bookmarkListNamesMap?.get(b.id)?.join(", ") ?? "";
     const note = b.note ?? "";
     const status = b.archived ? "Archived" : "Saved";
-    const dateSaved = b.createdAt
-      ? b.createdAt.toISOString().split("T")[0]
-      : "";
-    const bannerAsset = b.assets.find((a) => a.assetType === "bannerImage");
-    const realThumb = bannerAsset ? bannerAsset.id : "";
+    const favourited = b.favourited ? "Yes" : "No";
+    const dateSaved = b.createdAt ? b.createdAt.toISOString() : "";
 
     return [
-      idx + 1,
+      escapeCsv(idx + 1),
+      escapeCsv(b.id),
+      escapeCsv(b.content.type),
       escapeCsv(title),
       escapeCsv(url),
+      escapeCsv(textContent),
       escapeCsv(description),
       escapeCsv(note),
       escapeCsv(tags),
+      escapeCsv(lists),
       escapeCsv(status),
+      escapeCsv(favourited),
       escapeCsv(dateSaved),
-      escapeCsv(realThumb),
+      escapeCsv(thumbUrl),
     ].join(",");
   });
 
-  return [headers.join(","), ...rows].join("\n");
+  // Include UTF-8 BOM so Excel opens special characters correctly
+  return "\uFEFF" + [headers.map(escapeCsv).join(","), ...rows].join("\r\n");
 }

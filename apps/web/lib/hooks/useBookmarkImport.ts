@@ -9,6 +9,7 @@ import { useTRPC } from "@karakeep/shared-react/trpc";
 import {
   ImportSource,
   parseImportFile,
+  parseUniversalExcelBuffer,
 } from "@karakeep/shared/import-export";
 
 export interface ImportProgress {
@@ -42,9 +43,21 @@ export function useBookmarkImport() {
       // Clear any previous quota error
       setQuotaError(null);
 
-      // First, parse the file to count bookmarks
-      const textContent = await file.text();
-      const parsedImport = parseImportFile(source, textContent);
+      // Detect if file is Excel (.xlsx / .xls)
+      const fileNameLower = file.name.toLowerCase();
+      const isExcel =
+        fileNameLower.endsWith(".xlsx") ||
+        fileNameLower.endsWith(".xls") ||
+        source === "excel";
+
+      let parsedImport;
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        parsedImport = parseUniversalExcelBuffer(buffer);
+      } else {
+        const textContent = await file.text();
+        parsedImport = parseImportFile(source, textContent);
+      }
       const bookmarkCount = parsedImport.bookmarks.length;
 
       // Check quota before proceeding
@@ -76,7 +89,11 @@ export function useBookmarkImport() {
           url: b.content?.type === "link" ? b.content.url : undefined,
           title: b.title,
           content: b.content?.type === "text" ? b.content.text : undefined,
+          description: b.description,
           note: b.notes,
+          favourited: b.favourited,
+          imageUrl: b.imageUrl,
+          lists: b.lists ?? [],
           tags: b.tags ?? [],
           sourceAddedAt: b.addDate ? new Date(b.addDate * 1000) : undefined,
           archived: b.archived,

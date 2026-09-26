@@ -13,6 +13,7 @@ import {
 } from "@karakeep/db/schema";
 import {
   toCsvFormat,
+  toExcelFormat,
   toExportFormat,
   toExportListFormat,
   toNetscapeFormat,
@@ -48,62 +49,82 @@ export async function GET(request: NextRequest) {
     bookmarks = [...bookmarks, ...resp.bookmarks];
   }
 
+  // Fetch lists and bookmark-to-list memberships
+  const listsResp = await caller.lists.list();
+  const ownedLists = listsResp.lists.filter((l) => l.userRole === "owner");
+
+  const manualLists = ownedLists.filter((l) => l.type === "manual");
+  const manualListIds = manualLists.map((l) => l.id);
+  const listIdToName = new Map(manualLists.map((l) => [l.id, l.name]));
+
+  let memberships: { bookmarkId: string; listId: string }[] = [];
+  if (manualListIds.length > 0) {
+    memberships = await db
+      .select({
+        bookmarkId: bookmarksInLists.bookmarkId,
+        listId: bookmarksInLists.listId,
+      })
+      .from(bookmarksInLists)
+      .innerJoin(
+        bookmarksTable,
+        eq(bookmarksTable.id, bookmarksInLists.bookmarkId),
+      )
+      .where(
+        and(
+          inArray(bookmarksInLists.listId, manualListIds),
+          eq(bookmarksTable.userId, ctx.user.id),
+        ),
+      );
+  }
+
+  const bookmarkListMap = new Map<string, string[]>();
+  const bookmarkListNamesMap = new Map<string, string[]>();
+  for (const m of memberships) {
+    const existing = bookmarkListMap.get(m.bookmarkId) ?? [];
+    existing.push(m.listId);
+    bookmarkListMap.set(m.bookmarkId, existing);
+
+    const name = listIdToName.get(m.listId);
+    if (name) {
+      const existingNames = bookmarkListNamesMap.get(m.bookmarkId) ?? [];
+      existingNames.push(name);
+      bookmarkListNamesMap.set(m.bookmarkId, existingNames);
+    }
+  }
+
   if (format === "json") {
-    // Fetch lists and bookmark-to-list memberships
-    const listsResp = await caller.lists.list();
-    const ownedLists = listsResp.lists.filter((l) => l.userRole === "owner");
-
-    const manualLists = ownedLists.filter((l) => l.type === "manual");
-    const manualListIds = manualLists.map((l) => l.id);
-
-    let memberships: { bookmarkId: string; listId: string }[] = [];
-    if (manualListIds.length > 0) {
-      memberships = await db
-        .select({
-          bookmarkId: bookmarksInLists.bookmarkId,
-          listId: bookmarksInLists.listId,
-        })
-        .from(bookmarksInLists)
-        .innerJoin(
-          bookmarksTable,
-          eq(bookmarksTable.id, bookmarksInLists.bookmarkId),
-        )
-        .where(
-          and(
-            inArray(bookmarksInLists.listId, manualListIds),
-            eq(bookmarksTable.userId, ctx.user.id),
-          ),
-        );
-    }
-
-    const bookmarkListMap = new Map<string, string[]>();
-    for (const m of memberships) {
-      const existing = bookmarkListMap.get(m.bookmarkId) ?? [];
-      existing.push(m.listId);
-      bookmarkListMap.set(m.bookmarkId, existing);
-    }
-
     const exportData: z.infer<typeof zExportSchema> = {
-      bookmarks: bookmarks
-        .map((b) => toExportFormat(b, bookmarkListMap.get(b.id) ?? []))
-        .filter((b) => b.content !== null),
+      bookmarks: bookmarks.map((b) =>
+        toExportFormat(b, bookmarkListMap.get(b.id) ?? []),
+      ),
       lists: ownedLists.map(toExportListFormat),
     };
 
-    return new Response(JSON.stringify(exportData), {
+    return new Response(JSON.stringify(exportData, null, 2), {
       status: 200,
       headers: {
         "Content-type": "application/json",
         "Content-disposition": `attachment; filename="karakeep-export-${new Date().toISOString()}.json"`,
       },
     });
-  } else if (format === "csv" || format === "excel") {
-    const csvContent = toCsvFormat(bookmarks);
-    const filename = `karakeep-export-${new Date().toISOString().split("T")[0]}.${format === "excel" ? "csv" : "csv"}`;
+  } else if (format === "excel" || format === "xlsx") {
+    const excelBuffer = toExcelFormat(bookmarks, bookmarkListNamesMap);
+    const filename = `karakeep-export-${new Date().toISOString().split("T")[0]}.xlsx`;
+    return new Response(Buffer.from(excelBuffer), {
+      status: 200,
+      headers: {
+        "Content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  } else if (format === "csv") {
+    const csvContent = toCsvFormat(bookmarks, bookmarkListNamesMap);
+    const filename = `karakeep-export-${new Date().toISOString().split("T")[0]}.csv`;
     return new Response(csvContent, {
       status: 200,
       headers: {
-        "Content-type": format === "excel" ? "application/vnd.ms-excel; charset=utf-8" : "text/csv; charset=utf-8",
+        "Content-type": "text/csv; charset=utf-8",
         "Content-disposition": `attachment; filename="${filename}"`,
       },
     });

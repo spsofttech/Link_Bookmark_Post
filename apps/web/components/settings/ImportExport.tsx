@@ -50,7 +50,7 @@ function ImportCard({
 
 function ExportButton() {
   const { t } = useTranslation();
-  const [format, setFormat] = useState<"json" | "csv" | "netscape">("json");
+  const [format, setFormat] = useState<"excel" | "csv" | "json" | "netscape">("excel");
   const queryClient = useQueryClient();
   const { isFetching, refetch, error } = useQuery({
     queryKey: ["exportBookmarks"],
@@ -63,9 +63,17 @@ function ExportButton() {
       const match = res.headers
         .get("Content-Disposition")
         ?.match(/filename\*?=(?:UTF-8''|")?([^"]+)/i);
+      const ext =
+        format === "excel"
+          ? "xlsx"
+          : format === "csv"
+            ? "csv"
+            : format === "json"
+              ? "json"
+              : "html";
       const filename = match
         ? match[1]
-        : `karakeep-export-${new Date().toISOString()}.${format === "netscape" ? "html" : "csv"}`;
+        : `karakeep-export-${new Date().toISOString().split("T")[0]}.${ext}`;
       return { blob: res.blob(), filename };
     },
     enabled: false,
@@ -105,15 +113,16 @@ function ExportButton() {
           <Select
             value={format}
             onValueChange={(value) =>
-              setFormat(value as "json" | "csv" | "netscape")
+              setFormat(value as "excel" | "csv" | "json" | "netscape")
             }
           >
             <SelectTrigger className="mt-2 w-[220px]">
               <SelectValue placeholder="Format" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="json">JSON (Full metadata format)</SelectItem>
+              <SelectItem value="excel">Excel (.xlsx)</SelectItem>
               <SelectItem value="csv">CSV (Excel / Spreadsheet)</SelectItem>
+              <SelectItem value="json">JSON (Full metadata format)</SelectItem>
               <SelectItem value="netscape">HTML (Netscape format)</SelectItem>
             </SelectContent>
           </Select>
@@ -160,7 +169,14 @@ export function ImportExportRow() {
             multiple={false}
             className="flex items-center gap-2"
             onFileSelect={(file) =>
-              runUploadBookmarkFile({ file, source: "csv" })
+              runUploadBookmarkFile({
+                file,
+                source:
+                  file.name.toLowerCase().endsWith(".xlsx") ||
+                  file.name.toLowerCase().endsWith(".xls")
+                    ? "excel"
+                    : "csv",
+              })
             }
           >
             <p>Import</p>

@@ -250,10 +250,14 @@ export const bookmarksAppRouter = router({
             url: z.string().optional(),
             title: z.string().optional(),
             content: z.string().optional(),
+            description: z.string().optional(),
             note: z.string().optional(),
             tags: z.array(z.string()).default([]),
+            lists: z.array(z.string()).default([]),
             sourceAddedAt: z.date().optional(),
             archived: z.boolean().optional(),
+            favourited: z.boolean().optional(),
+            imageUrl: z.string().optional(),
           }),
         ),
       }),
@@ -316,10 +320,23 @@ export const bookmarksAppRouter = router({
         tagCache.set(t.name.toLowerCase().trim(), t.id);
       }
 
+      // 4. Cache existing lists for this user
+      const existingUserLists = await ctx.db.query.bookmarkLists.findMany({
+        where: eq(bookmarkLists.userId, userId),
+      });
+      const listCache = new Map<string, string>();
+      for (const l of existingUserLists) {
+        listCache.set(l.name.toLowerCase().trim(), l.id);
+        listCache.set(l.id.toLowerCase().trim(), l.id);
+      }
+      if (rootListId && input.listName) {
+        listCache.set(input.listName.toLowerCase().trim(), rootListId);
+      }
+
       let importedCount = 0;
       let skippedCount = 0;
 
-      // 4. Batch insert in transactions of 50 items
+      // 5. Batch insert in transactions of 50 items
       const BATCH_SIZE = 50;
       for (let i = 0; i < input.bookmarks.length; i += BATCH_SIZE) {
         const batch = input.bookmarks.slice(i, i + BATCH_SIZE);
@@ -327,26 +344,16 @@ export const bookmarksAppRouter = router({
           async (tx) => {
             for (const item of batch) {
               const rawUrl = item.url?.trim();
-              if (item.type === "link") {
-                if (!rawUrl) {
-                  if (!item.title && !item.content && !item.note) {
-                    skippedCount++;
-                    continue;
-                  }
-                } else if (existingUrlSet.has(rawUrl.toLowerCase())) {
-                  skippedCount++;
-                  continue;
-                }
-                if (rawUrl) {
-                  existingUrlSet.add(rawUrl.toLowerCase());
-                }
+              if (item.type === "link" && !rawUrl && !item.title && !item.content && !item.note) {
+                skippedCount++;
+                continue;
               }
 
               const createdAt = item.sourceAddedAt ?? new Date();
               const cleanTitle = (item.title || rawUrl || "Untitled")
                 .trim()
                 .split("\n")[0]
-                .slice(0, 150);
+                .slice(0, 200);
 
               const [createdBookmark] = await tx
                 .insert(bookmarks)
@@ -363,6 +370,7 @@ export const bookmarksAppRouter = router({
                   source: "import",
                   taggingStatus: "success",
                   archived: item.archived ?? false,
+                  favourited: item.favourited ?? false,
                 })
                 .returning();
 
@@ -371,9 +379,12 @@ export const bookmarksAppRouter = router({
                   id: createdBookmark.id,
                   url: rawUrl,
                   title: cleanTitle,
+                  description: item.description || undefined,
+                  imageUrl: item.imageUrl || undefined,
                   crawlStatus: "pending",
                   crawlStatusCode: 200,
                 });
+                existingUrlSet.add(rawUrl.toLowerCase());
               } else {
                 await tx.insert(bookmarkTexts).values({
                   id: createdBookmark.id,
@@ -381,10 +392,39 @@ export const bookmarksAppRouter = router({
                 });
               }
 
-              if (rootListId) {
+              // Lists handling
+              const targetListIds = new Set<string>();
+              if (item.lists && item.lists.length > 0) {
+                for (const listName of item.lists) {
+                  const cleanListName = listName.trim();
+                  if (!cleanListName) continue;
+                  const norm = cleanListName.toLowerCase();
+                  let listId = listCache.get(norm);
+                  if (!listId) {
+                    const [newList] = await tx
+                      .insert(bookmarkLists)
+                      .values({
+                        userId,
+                        name: cleanListName,
+                        icon: "📁",
+                        type: "manual",
+                      })
+                      .returning();
+                    listId = newList.id;
+                    listCache.set(norm, listId);
+                  }
+                  targetListIds.add(listId);
+                }
+              }
+
+              if (targetListIds.size === 0 && rootListId) {
+                targetListIds.add(rootListId);
+              }
+
+              for (const listId of targetListIds) {
                 await tx.insert(bookmarksInLists).values({
                   bookmarkId: createdBookmark.id,
-                  listId: rootListId,
+                  listId,
                 });
               }
 
