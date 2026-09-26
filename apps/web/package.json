@@ -8,7 +8,7 @@
     "dev": "next dev",
     "dev:portless": "portless run --name karakeep-web --lan next dev",
     "clean": "git clean -xdf .next .turbo node_modules",
-    "build": "next build --experimental-build-mode compile",
+    "build": "next build",
     "start": "next start",
     "lint": "oxlint --ignore-path=../../.gitignore .",
     "lint:fix": "oxlint --ignore-path=../../.gitignore . --fix",
