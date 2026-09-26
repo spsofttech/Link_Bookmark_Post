@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: link-bookmark-post
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DATA_DIR
+        value: /data
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        fromService:
+          type: web
+          name: link-bookmark-post
+          property: host
