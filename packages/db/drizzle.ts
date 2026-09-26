@@ -22,6 +22,14 @@ instrumentDatabase(sqlite);
 export const db = drizzle(sqlite, { schema });
 export type DB = typeof db;
 
+try {
+  if (!serverConfig.degradedMode) {
+    migrate(db, { migrationsFolder: path.resolve(__dirname, "./drizzle") });
+  }
+} catch {
+  // Ignored if migrations already applied, read-only mode, or running concurrently
+}
+
 export function getInMemoryDB(runMigrations: boolean) {
   const mem = new Database(":memory:");
   const db = drizzle(mem, { schema, logger: false });

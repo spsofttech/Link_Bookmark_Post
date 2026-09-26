@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import Database from "better-sqlite3";
 
 interface OpenSqliteOptions {
@@ -9,15 +11,32 @@ export function openSqliteDatabase(
   filename: string,
   options: OpenSqliteOptions,
 ) {
-  const sqlite = new Database(
-    filename,
-    options.readOnly
-      ? {
-          readonly: true,
-          fileMustExist: true,
-        }
-      : undefined,
-  );
+  if (filename && filename !== ":memory:") {
+    const dir = path.dirname(path.resolve(filename));
+    if (!fs.existsSync(dir)) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {
+        // Ignore error if already exists
+      }
+    }
+  }
+
+  let sqlite: Database.Database;
+  try {
+    sqlite = new Database(
+      filename,
+      options.readOnly
+        ? {
+            readonly: true,
+            fileMustExist: true,
+          }
+        : undefined,
+    );
+  } catch {
+    // If opening failed on readOnly or missing file, open/create regularly
+    sqlite = new Database(filename);
+  }
 
   if (!options.readOnly) {
     if (options.walMode) {

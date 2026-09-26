@@ -43,7 +43,8 @@ yarn-error.log*
 
 # The sqlite database
 **/*.db
-data
+data/*
+!data/.gitkeep
 
 # PWA Files
 **/public/sw.js
