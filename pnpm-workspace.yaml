@@ -75,3 +75,4 @@ overrides:
   react-dom: 19.2.3
   "@types/react": 19.2.15
   "@types/react-dom": 19.2.3
+  react-error-boundary: 5.0.0

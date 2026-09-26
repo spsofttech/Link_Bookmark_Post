@@ -32,7 +32,7 @@
     "zod": "^4.2.0"
   },
   "scripts": {
-    "build": "vite build && chmod +x dist/index.mjs",
+    "build": "vite build && node -e \"require('fs').chmodSync('dist/index.mjs', 0o755)\"",
     "run": "tsx src/index.ts",
     "lint": "oxlint --ignore-path=../../.gitignore .",
     "lint:fix": "oxlint --ignore-path=../../.gitignore . --fix",
