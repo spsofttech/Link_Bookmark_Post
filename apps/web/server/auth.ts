@@ -216,8 +216,15 @@ if (oauth.wellKnownUrl) {
   });
 }
 
+let authSecret: string;
+try {
+  authSecret = serverConfig.signingSecret();
+} catch {
+  authSecret = process.env.NEXTAUTH_SECRET || "default_fallback_karakeep_secret_32chars_long";
+}
+
 export const authOptions: NextAuthOptions = {
-  secret: serverConfig.signingSecret(),
+  secret: authSecret,
   // https://github.com/nextauthjs/next-auth/issues/9493
   adapter: CustomProvider() as NextAuthAdapater,
   providers: providers,
