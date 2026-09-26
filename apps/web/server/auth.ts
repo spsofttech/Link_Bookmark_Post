@@ -331,4 +331,19 @@ export const authOptions: NextAuthOptions = {
 
 export const authHandler = NextAuth(authOptions);
 
-export const getServerAuthSession = () => getServerSession(authOptions);
+export const getServerAuthSession = async () => {
+  try {
+    return await getServerSession(authOptions);
+  } catch (err: unknown) {
+    const error = err as { digest?: string; message?: string };
+    if (
+      error?.digest === "DYNAMIC_SERVER_USAGE" ||
+      error?.message?.includes("Dynamic server usage") ||
+      error?.digest?.startsWith("NEXT_REDIRECT")
+    ) {
+      throw err;
+    }
+    console.error("Failed to get session:", err);
+    return null;
+  }
+};

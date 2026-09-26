@@ -39,19 +39,32 @@ export function openSqliteDatabase(
   }
 
   if (!options.readOnly) {
-    if (options.walMode) {
-      sqlite.pragma("journal_mode = WAL");
-      sqlite.pragma("synchronous = NORMAL");
-    } else {
-      sqlite.pragma("journal_mode = DELETE");
+    try {
+      if (options.walMode) {
+        sqlite.pragma("journal_mode = WAL");
+        sqlite.pragma("synchronous = NORMAL");
+      } else {
+        sqlite.pragma("journal_mode = DELETE");
+      }
+    } catch {
+      // Ignored if journaling cannot be altered
     }
   }
-  sqlite.pragma("cache_size = -65536");
-  sqlite.pragma("foreign_keys = ON");
-  sqlite.pragma("temp_store = MEMORY");
+
+  try {
+    sqlite.pragma("cache_size = -65536");
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.pragma("temp_store = MEMORY");
+  } catch {
+    // Ignored
+  }
 
   if (options.readOnly) {
-    sqlite.pragma("query_only = ON");
+    try {
+      sqlite.pragma("query_only = ON");
+    } catch {
+      // Ignored
+    }
   }
 
   return sqlite;

@@ -456,8 +456,10 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
         }
       : undefined,
     degradedMode: val.DEGRADED_MODE,
-    dataDir: val.DATA_DIR,
-    assetsDir: val.ASSETS_DIR ?? path.join(val.DATA_DIR, "assets"),
+    dataDir: val.DATA_DIR || (process.env.VERCEL ? "/tmp/data" : ""),
+    assetsDir:
+      val.ASSETS_DIR ??
+      path.join(val.DATA_DIR || (process.env.VERCEL ? "/tmp/data" : ""), "assets"),
     maxAssetSizeMb: val.MAX_ASSET_SIZE_MB,
     legal: {
       termsOfServiceUrl: val.TERMS_OF_SERVICE_URL,
