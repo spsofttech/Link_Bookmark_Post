@@ -292,6 +292,7 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
       disabledWorkers: val.WORKERS_DISABLED_WORKERS,
     },
     apiUrl: val.API_URL,
+    publicApiUrl: val.API_URL,
     publicUrl: val.NEXTAUTH_URL,
     signingSecret: () => {
       if (!val.NEXTAUTH_SECRET) {

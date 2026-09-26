@@ -31,8 +31,30 @@ try {
   if (!tableCheck) {
     sqlite.exec(SCHEMA_SQL);
   }
+
+  // Guarantee primary user exists across all serverless/ephemeral environments
+  const userCheck = sqlite
+    .prepare("SELECT count(*) as count FROM user WHERE email = 'gajerasiddharth10@gmail.com'")
+    .get() as { count: number } | undefined;
+
+  if (!userCheck || userCheck.count === 0) {
+    sqlite
+      .prepare(
+        `INSERT OR REPLACE INTO user (
+          id, name, email, role, password, salt
+        ) VALUES (
+          'cxzee7jvwun32h9bsndixm59',
+          'Siddharth Gajera',
+          'gajerasiddharth10@gmail.com',
+          'admin',
+          '$2a$10$HjmtTc9SlLdgrjm3.FGnIuEChS/5wKBJLLSgEJqbYlLvkJeEk3t82',
+          '9073499823fe323cfae06ba2cf1ed0c20d3ff8c3d932d6e423fe815b4d8b803f'
+        )`
+      )
+      .run();
+  }
 } catch (e) {
-  console.error("Failed to auto-initialize SQLite tables from schema fallback:", e);
+  console.error("Failed to auto-initialize SQLite tables or seed user from schema fallback:", e);
 }
 
 try {
