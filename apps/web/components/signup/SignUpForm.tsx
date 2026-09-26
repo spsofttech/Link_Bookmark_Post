@@ -29,7 +29,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { useMutation } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { AlertCircle, UserX } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, UserX } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -56,6 +56,8 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
     },
   });
   const [errorMessage, setErrorMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
   const clientConfig = useClientConfig();
   const turnstileSiteKey = clientConfig.turnstile?.siteKey;
@@ -122,10 +124,11 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                   ...value,
                   redirectUrl,
                 });
-              } catch (e) {
-                if (e instanceof TRPCClientError) {
-                  setErrorMessage(e.message);
-                }
+              } catch (e: any) {
+                const msg =
+                  e?.message ||
+                  (e instanceof TRPCClientError ? e.message : "Failed to create account. Please try again.");
+                setErrorMessage(msg);
                 // Reset turnstile widget on error to get a new token
                 if (turnstileSiteKey) {
                   turnstileRef.current?.reset();
@@ -213,11 +216,27 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="Create a password"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a password"
+                        className="pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                        tabIndex={-1}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -231,11 +250,27 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="Confirm your password"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your password"
+                        className="pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                        tabIndex={-1}
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

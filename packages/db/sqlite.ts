@@ -12,12 +12,32 @@ export function openSqliteDatabase(
   options: OpenSqliteOptions,
 ) {
   if (filename && filename !== ":memory:") {
-    const dir = path.dirname(path.resolve(filename));
+    const resolvedPath = path.resolve(filename);
+    const dir = path.dirname(resolvedPath);
     if (!fs.existsSync(dir)) {
       try {
         fs.mkdirSync(dir, { recursive: true });
       } catch {
         // Ignore error if already exists
+      }
+    }
+
+    if (!fs.existsSync(resolvedPath) || fs.statSync(resolvedPath).size === 0) {
+      const candidates = [
+        path.resolve(process.cwd(), "packages/db/db.db"),
+        path.resolve(process.cwd(), "data/db.db"),
+        path.resolve(__dirname, "./db.db"),
+        path.resolve(__dirname, "../../packages/db/db.db"),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate) && candidate !== resolvedPath) {
+          try {
+            fs.copyFileSync(candidate, resolvedPath);
+            break;
+          } catch {
+            // Ignore error copying template
+          }
+        }
       }
     }
   }
