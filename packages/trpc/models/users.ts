@@ -133,6 +133,7 @@ export class User {
 
           return result;
         } catch (e) {
+          console.error("Error creating user in User.createRaw:", e);
           if (e instanceof SqliteError) {
             if (e.code === "SQLITE_CONSTRAINT_UNIQUE") {
               throw new TRPCError({
@@ -143,7 +144,7 @@ export class User {
           }
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Something went wrong",
+            message: e instanceof Error ? e.message : "Something went wrong",
           });
         }
       },
