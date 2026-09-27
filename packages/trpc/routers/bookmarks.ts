@@ -1,5 +1,5 @@
 import { experimental_trpcMiddleware, TRPCError } from "@trpc/server";
-import { and, eq, gt, inArray, like, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, inArray, like, lt, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -40,7 +40,7 @@ import logger from "@karakeep/shared/logger";
 import { buildSummaryPrompt } from "@karakeep/shared/prompts.server";
 import { EnqueueOptions } from "@karakeep/shared/queueing";
 import { getRateLimitClient } from "@karakeep/shared/ratelimiting";
-import { FilterQuery, getSearchClient } from "@karakeep/shared/search";
+import { FilterQuery, SearchResponse, getSearchClient } from "@karakeep/shared/search";
 import { parseSearchQuery } from "@karakeep/shared/searchQueryParser";
 import type {
   ZBookmarkContent,
@@ -77,7 +77,7 @@ import {
   router,
 } from "../index";
 import { RuleEngine } from "../lib/ruleEngine";
-import { getBookmarkIdsFromMatcher } from "../lib/search";
+import { buildInArrayCondition, getBookmarkIdsFromMatcher } from "../lib/search";
 import { reciprocalRankFusion } from "../lib/searchRanking";
 import { Asset } from "../models/assets";
 import { BareBookmark, Bookmark } from "../models/bookmarks";
@@ -1254,21 +1254,141 @@ export const bookmarksAppRouter = router({
       let hasMore: boolean;
       let resultCount: number;
 
-      const fullTextSearch = async (limit: number, searchOffset?: number) => {
+      const dbFullTextSearch = async (
+        searchLimit: number,
+        searchOffset: number,
+      ): Promise<SearchResponse> => {
+        const startTime = Date.now();
+        const userId = ctx.user.id;
+
+        const idFilter = filter.find(
+          (f) => f.type === "in" && f.field === "id",
+        ) as { type: "in"; field: "id"; values: string[] } | undefined;
+
+        if (idFilter && idFilter.values.length === 0) {
+          return { hits: [], totalHits: 0, processingTimeMs: 0 };
+        }
+
+        const conditions = [eq(bookmarks.userId, userId)];
+
+        if (idFilter && idFilter.values.length > 0) {
+          const inCond = buildInArrayCondition(bookmarks.id, idFilter.values);
+          if (inCond) {
+            conditions.push(inCond);
+          }
+        }
+
+        const searchText = parsedQuery.text.trim();
+        if (searchText.length > 0) {
+          const searchPattern = `%${searchText}%`;
+          conditions.push(
+            or(
+              like(bookmarks.title, searchPattern),
+              like(bookmarks.note, searchPattern),
+              like(bookmarks.summary, searchPattern),
+              exists(
+                ctx.db
+                  .select()
+                  .from(bookmarkLinks)
+                  .where(
+                    and(
+                      eq(bookmarkLinks.id, bookmarks.id),
+                      or(
+                        like(bookmarkLinks.url, searchPattern),
+                        like(bookmarkLinks.title, searchPattern),
+                        like(bookmarkLinks.description, searchPattern),
+                      ),
+                    ),
+                  ),
+              ),
+              exists(
+                ctx.db
+                  .select()
+                  .from(bookmarkTexts)
+                  .where(
+                    and(
+                      eq(bookmarkTexts.id, bookmarks.id),
+                      like(bookmarkTexts.text, searchPattern),
+                    ),
+                  ),
+              ),
+              exists(
+                ctx.db
+                  .select()
+                  .from(bookmarkAssets)
+                  .where(
+                    and(
+                      eq(bookmarkAssets.id, bookmarks.id),
+                      or(
+                        like(bookmarkAssets.fileName, searchPattern),
+                        like(bookmarkAssets.sourceUrl, searchPattern),
+                      ),
+                    ),
+                  ),
+              ),
+              exists(
+                ctx.db
+                  .select()
+                  .from(tagsOnBookmarks)
+                  .innerJoin(
+                    bookmarkTags,
+                    eq(tagsOnBookmarks.tagId, bookmarkTags.id),
+                  )
+                  .where(
+                    and(
+                      eq(tagsOnBookmarks.bookmarkId, bookmarks.id),
+                      like(bookmarkTags.name, searchPattern),
+                    ),
+                  ),
+              ),
+            )!,
+          );
+        }
+
+        const whereClause = and(...conditions);
+
+        const countResult = await ctx.db
+          .select({ id: bookmarks.id })
+          .from(bookmarks)
+          .where(whereClause);
+
+        const totalHits = countResult.length;
+        const orderFn = createdAtSortOrder === "asc" ? asc : desc;
+
+        const rows = await ctx.db
+          .select({ id: bookmarks.id })
+          .from(bookmarks)
+          .where(whereClause)
+          .orderBy(orderFn(bookmarks.createdAt))
+          .limit(searchLimit)
+          .offset(searchOffset);
+
+        return {
+          hits: rows.map((r) => ({ id: r.id, score: 1 })),
+          totalHits,
+          processingTimeMs: Date.now() - startTime,
+        };
+      };
+
+      const fullTextSearch = async (searchLimit: number, searchOffset?: number) => {
         const client = await getSearchClient();
         if (!client) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Search functionality is not configured",
-          });
+          return dbFullTextSearch(searchLimit, searchOffset ?? 0);
         }
-        return client.search({
-          query: parsedQuery.text,
-          filter,
-          sort: [{ field: "createdAt", order: createdAtSortOrder }],
-          limit,
-          ...(searchOffset !== undefined ? { offset: searchOffset } : {}),
-        });
+        try {
+          return await client.search({
+            query: parsedQuery.text,
+            filter,
+            sort: [{ field: "createdAt", order: createdAtSortOrder }],
+            limit: searchLimit,
+            ...(searchOffset !== undefined ? { offset: searchOffset } : {}),
+          });
+        } catch (err) {
+          logger.warn(
+            `Search plugin query failed; falling back to DB search: ${err}`,
+          );
+          return dbFullTextSearch(searchLimit, searchOffset ?? 0);
+        }
       };
 
       const fullTextPage = (

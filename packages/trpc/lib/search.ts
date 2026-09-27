@@ -90,6 +90,32 @@ function union(vals: BookmarkQueryReturnType[][]): BookmarkQueryReturnType[] {
   return result;
 }
 
+export function buildInArrayCondition<T extends import("drizzle-orm").Column>(
+  column: T,
+  values: string[],
+  inverse = false,
+) {
+  if (!values || values.length === 0) {
+    if (inverse) return undefined;
+    return eq(column, "__NO_MATCHING_ID__" as unknown as never);
+  }
+
+  const CHUNK_SIZE = 500;
+  if (values.length <= CHUNK_SIZE) {
+    return inverse ? notInArray(column, values) : inArray(column, values);
+  }
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < values.length; i += CHUNK_SIZE) {
+    chunks.push(values.slice(i, i + CHUNK_SIZE));
+  }
+
+  if (inverse) {
+    return and(...chunks.map((chunk) => notInArray(column, chunk)));
+  }
+  return or(...chunks.map((chunk) => inArray(column, chunk)));
+}
+
 async function getIds(
   ctx: AuthedContext,
   matcher: Matcher,
@@ -200,15 +226,19 @@ async function getIds(
         return [];
       }
 
+      const listCondition = buildInArrayCondition(
+        bookmarks.id,
+        listBookmarkIds,
+        matcher.inverse,
+      );
+
       return db
         .selectDistinct({ id: bookmarks.id })
         .from(bookmarks)
         .where(
           and(
             eq(bookmarks.userId, userId),
-            matcher.inverse
-              ? notInArray(bookmarks.id, listBookmarkIds)
-              : inArray(bookmarks.id, listBookmarkIds),
+            listCondition,
           ),
         );
     }

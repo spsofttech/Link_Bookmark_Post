@@ -26,7 +26,14 @@ function SearchComp() {
   }, [setInSearchPage]);
 
   if (error) {
-    throw error;
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <p className="text-base font-medium mb-1">Search failed</p>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {error.message || "An unexpected error occurred while searching. Please try again."}
+        </p>
+      </div>
+    );
   }
 
   return (

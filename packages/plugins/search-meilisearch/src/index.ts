@@ -19,11 +19,24 @@ function filterToMeiliSearchFilter(filter: FilterQuery): string {
   switch (filter.type) {
     case "eq":
       return `${filter.field} = "${filter.value}"`;
-    case "in":
-      return `${filter.field} IN [${filter.values.join(",")}]`;
+    case "in": {
+      if (filter.values.length === 0) {
+        return `${filter.field} = "__NO_MATCHING_ID__"`;
+      }
+      const CHUNK_SIZE = 500;
+      if (filter.values.length <= CHUNK_SIZE) {
+        return `${filter.field} IN [${filter.values.map((v) => `"${v}"`).join(",")}]`;
+      }
+      const chunks: string[] = [];
+      for (let i = 0; i < filter.values.length; i += CHUNK_SIZE) {
+        const chunk = filter.values.slice(i, i + CHUNK_SIZE);
+        chunks.push(`${filter.field} IN [${chunk.map((v) => `"${v}"`).join(",")}]`);
+      }
+      return `(${chunks.join(" OR ")})`;
+    }
     default: {
       const exhaustiveCheck: never = filter;
-      throw new Error(`Unhandled color case: ${exhaustiveCheck}`);
+      throw new Error(`Unhandled filter case: ${exhaustiveCheck}`);
     }
   }
 }
