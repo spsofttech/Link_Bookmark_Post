@@ -139,8 +139,7 @@ export default function UploadDropzone({
       if (!items) return;
 
       const imageFiles: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+      for (const item of Array.from(items)) {
         if (item.type.startsWith("image/")) {
           const file = item.getAsFile();
           if (file) {
@@ -153,7 +152,9 @@ export default function UploadDropzone({
         e.preventDefault();
         uploadAssets(imageFiles);
         setNumUploading(imageFiles.length);
-        toast({ description: `Pasted ${imageFiles.length} image(s). Uploading...` });
+        toast({
+          description: `Pasted ${imageFiles.length} image(s). Uploading...`,
+        });
       }
     };
 

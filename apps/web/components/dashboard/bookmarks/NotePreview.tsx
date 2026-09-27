@@ -33,7 +33,7 @@ export function renderTextWithLinks(text: string) {
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium break-all"
+            className="break-all font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
             onClick={(e) => e.stopPropagation()}
           >
             {url}
@@ -70,10 +70,15 @@ export function NotePreview({ note, bookmarkId, className }: NotePreviewProps) {
           )}
         >
           <NotepadText className="size-5 shrink-0" />
-          <div className="min-w-0 flex-1 truncate">{renderTextWithLinks(note)}</div>
+          <div className="min-w-0 flex-1 truncate">
+            {renderTextWithLinks(note)}
+          </div>
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-96 max-w-[calc(100vw-2rem)] z-[100]" align="start">
+      <PopoverContent
+        className="z-[100] w-96 max-w-[calc(100vw-2rem)]"
+        align="start"
+      >
         <div className="space-y-3">
           <div className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-300">
             {renderTextWithLinks(note)}

@@ -379,8 +379,8 @@ function GridView({
   footer,
   className,
   wrapTags,
-  layout,
-  fitHeight = false,
+  _layout,
+  _fitHeight = false,
   bookmarkIndex,
 }: Props & { layout: BookmarksLayoutTypes }) {
   const { showNotes, showTags, showTitle, imageFit } =
@@ -395,11 +395,7 @@ function GridView({
     showNotes && rawNoteStr && rawNoteStr.toLowerCase() !== rawTitleStr
       ? rawNoteStr
       : undefined;
-  const isMasonry = layout === "masonry";
-  const img = image(
-    "grid",
-    cn("h-44 w-full rounded-t-lg", imgFitClass),
-  );
+  const img = image("grid", cn("h-44 w-full rounded-t-lg", imgFitClass));
 
   return (
     <div

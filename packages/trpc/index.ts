@@ -78,7 +78,9 @@ const t = initTRPC.context<Context>().create({
       message:
         error.code === "INTERNAL_SERVER_ERROR" &&
         process.env.NODE_ENV === "production"
-          ? (shape.message && shape.message !== "INTERNAL_SERVER_ERROR" ? shape.message : error.message || "Internal server error")
+          ? shape.message && shape.message !== "INTERNAL_SERVER_ERROR"
+            ? shape.message
+            : error.message || "Internal server error"
           : shape.message,
       data: {
         ...shape.data,

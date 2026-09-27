@@ -124,10 +124,13 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                   ...value,
                   redirectUrl,
                 });
-              } catch (e: any) {
+              } catch (e: unknown) {
+                const err = e as { message?: string };
                 const msg =
-                  e?.message ||
-                  (e instanceof TRPCClientError ? e.message : "Failed to create account. Please try again.");
+                  err?.message ||
+                  (e instanceof TRPCClientError
+                    ? e.message
+                    : "Failed to create account. Please try again.");
                 setErrorMessage(msg);
                 // Reset turnstile widget on error to get a new token
                 if (turnstileSiteKey) {
@@ -228,7 +231,9 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                         tabIndex={-1}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -259,10 +264,16 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                         tabIndex={-1}
-                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
                       >
                         {showConfirmPassword ? (
                           <EyeOff className="h-4 w-4" />

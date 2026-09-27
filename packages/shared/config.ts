@@ -296,7 +296,10 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
     publicUrl: val.NEXTAUTH_URL,
     signingSecret: () => {
       if (!val.NEXTAUTH_SECRET) {
-        return process.env.NEXTAUTH_SECRET || "default_fallback_karakeep_secret_32chars_long";
+        return (
+          process.env.NEXTAUTH_SECRET ||
+          "default_fallback_karakeep_secret_32chars_long"
+        );
       }
       return val.NEXTAUTH_SECRET;
     },
@@ -460,7 +463,10 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
     dataDir: val.DATA_DIR || (process.env.VERCEL ? "/tmp/data" : ""),
     assetsDir:
       val.ASSETS_DIR ??
-      path.join(val.DATA_DIR || (process.env.VERCEL ? "/tmp/data" : ""), "assets"),
+      path.join(
+        val.DATA_DIR || (process.env.VERCEL ? "/tmp/data" : ""),
+        "assets",
+      ),
     maxAssetSizeMb: val.MAX_ASSET_SIZE_MB,
     legal: {
       termsOfServiceUrl: val.TERMS_OF_SERVICE_URL,

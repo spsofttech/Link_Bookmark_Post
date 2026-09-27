@@ -82,26 +82,35 @@ export function toExportFormat(
       break;
     }
     case BookmarkTypes.ASSET: {
+      const assetContent = bookmark.content as {
+        assetId?: string;
+        id?: string;
+      };
       content = {
         type: BookmarkTypes.ASSET as const,
-        assetId: (bookmark.content as any).assetId ?? (bookmark.content as any).id,
+        assetId: assetContent?.assetId ?? assetContent?.id ?? "",
       };
       break;
     }
     default: {
+      const linkContent = bookmark.content as { url?: string };
       content = {
         type: BookmarkTypes.LINK as const,
-        url: (bookmark.content as any).url || "",
+        url: linkContent?.url || "",
       };
       break;
     }
   }
 
-  const bannerAsset = bookmark.assets?.find((a) => a.assetType === "bannerImage");
+  const bannerAsset = bookmark.assets?.find(
+    (a) => a.assetType === "bannerImage",
+  );
   const imageUrl =
     bookmark.content.type === BookmarkTypes.LINK
       ? (bookmark.content.imageUrl ?? (bannerAsset ? bannerAsset.id : null))
-      : (bannerAsset ? bannerAsset.id : null);
+      : bannerAsset
+        ? bannerAsset.id
+        : null;
 
   return {
     id: bookmark.id,
@@ -259,7 +268,10 @@ export function toExcelFormat(
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Bookmarks");
-  return XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }) as Uint8Array;
+  return XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "buffer",
+  }) as Uint8Array;
 }
 
 export function toCsvFormat(
@@ -283,7 +295,7 @@ export function toCsvFormat(
     "Thumbnail",
   ];
 
-  const escapeCsv = (str: any) => {
+  const escapeCsv = (str: unknown) => {
     if (str === null || str === undefined) return '""';
     const val = String(str).replace(/"/g, '""');
     return `"${val}"`;

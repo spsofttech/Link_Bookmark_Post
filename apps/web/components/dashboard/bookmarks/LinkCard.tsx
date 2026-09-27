@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import type { ZBookmarkTypeLink } from "@karakeep/shared/types/bookmarks";
 import {
   getBookmarkLinkImageUrl,
-  getBookmarkTitle,
   getSourceUrl,
   isBookmarkStillCrawling,
 } from "@karakeep/shared/utils/bookmarkUtils";
@@ -19,7 +18,7 @@ import { BookmarkLayoutAdaptingCard } from "./BookmarkLayoutAdaptingCard";
 import { EditBookmarkDialog } from "./EditBookmarkDialog";
 import FooterLinkURL from "./FooterLinkURL";
 
-import { NotePreview, renderTextWithLinks } from "./NotePreview";
+import { renderTextWithLinks } from "./NotePreview";
 
 const useOnClickUrl = (bookmark: ZBookmarkTypeLink) => {
   const userSettings = useUserSettings();
@@ -90,7 +89,7 @@ function LinkImage({
             e.stopPropagation();
             onEditImage();
           }}
-          className="absolute right-2 bottom-2 z-40 inline-flex items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover/image:opacity-100 hover:bg-black/85 shadow-md"
+          className="absolute bottom-2 right-2 z-40 inline-flex items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md backdrop-blur-md transition-opacity duration-200 hover:bg-black/85 group-hover/image:opacity-100"
           title="Edit Cover Image"
         >
           <ImagePlus className="size-3.5" />
@@ -115,8 +114,8 @@ function LinkCardContent({
   const rawTitle = bookmark.content.title;
   const showTitle = Boolean(
     rawTitle &&
-      rawTitle.trim() !== "" &&
-      rawTitle.trim().toLowerCase() !== url.trim().toLowerCase(),
+    rawTitle.trim() !== "" &&
+    rawTitle.trim().toLowerCase() !== url.trim().toLowerCase(),
   );
   const description = bookmark.content.description || bookmark.summary || "";
 
@@ -141,7 +140,7 @@ function LinkCardContent({
               e.stopPropagation();
               onEditField("url");
             }}
-            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover/url:opacity-100 hover:bg-accent hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/url:opacity-100"
             title="Edit URL"
           >
             <Pencil className="size-3" />
@@ -153,7 +152,7 @@ function LinkCardContent({
       {/* 2. Title below URL with inline edit button (MAX 1 LINE, no deadspace) */}
       {showTitle ? (
         <div className="group/title flex items-center justify-between gap-1">
-          <h3 className="text-left text-sm font-semibold leading-tight text-foreground line-clamp-1 flex-1">
+          <h3 className="line-clamp-1 flex-1 text-left text-sm font-semibold leading-tight text-foreground">
             <Link
               href={onClickUrl}
               target={urlTarget}
@@ -171,7 +170,7 @@ function LinkCardContent({
                 e.stopPropagation();
                 onEditField("title");
               }}
-              className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100 hover:bg-accent hover:text-foreground"
+              className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/title:opacity-100"
               title="Edit Title"
             >
               <Pencil className="size-3" />
@@ -204,7 +203,7 @@ function LinkCardContent({
           <div className="flex items-start justify-between gap-1">
             <p
               className={cn(
-                "text-left text-xs leading-snug text-muted-foreground transition-all duration-200 flex-1",
+                "flex-1 text-left text-xs leading-snug text-muted-foreground transition-all duration-200",
                 !isExpanded && "line-clamp-2",
               )}
             >
@@ -218,7 +217,7 @@ function LinkCardContent({
                   e.stopPropagation();
                   onEditField("description");
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover/desc:opacity-100 hover:bg-accent hover:text-foreground"
+                className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/desc:opacity-100"
                 title="Edit Description"
               >
                 <Pencil className="size-3" />
@@ -328,4 +327,3 @@ export default function LinkCard({
     </>
   );
 }
-

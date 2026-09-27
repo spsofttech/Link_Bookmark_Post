@@ -59,9 +59,11 @@ export default function EditorCard({ className }: { className?: string }) {
         source,
       });
       toast({ description: "Bookmarks imported successfully!" });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to import file";
       toast({
-        description: err.message || "Failed to import file",
+        description: message,
         variant: "destructive",
       });
     }

@@ -132,12 +132,15 @@ export class User {
             .all();
 
           return result;
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error("Error creating user in User.createRaw:", e);
+          const err = e as { code?: string; message?: string };
           const isUniqueConstraint =
-            (e instanceof SqliteError && e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
-            e?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
-            (typeof e?.message === "string" && e.message.includes("UNIQUE constraint failed"));
+            (e instanceof SqliteError &&
+              e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
+            err?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+            (typeof err?.message === "string" &&
+              err.message.includes("UNIQUE constraint failed"));
 
           if (isUniqueConstraint) {
             throw new TRPCError({

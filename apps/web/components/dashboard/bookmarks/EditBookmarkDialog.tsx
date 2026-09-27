@@ -194,9 +194,9 @@ export function EditBookmarkDialog({
     const handleDialogPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith("image/")) {
-          const file = items[i].getAsFile();
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
           if (file) {
             e.preventDefault();
             processImageFile(file);
@@ -345,15 +345,15 @@ export function EditBookmarkDialog({
   const renderImageSection = () => (
     <div
       ref={imageSectionRef}
-      className="flex flex-col gap-3 rounded-lg border p-3.5 bg-muted/20 shadow-sm"
+      className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3.5 shadow-sm"
     >
       <div className="flex items-center justify-between">
-        <FormLabel className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+        <FormLabel className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <ImageIcon className="size-4 text-primary" />
           Cover Image / Thumbnail
         </FormLabel>
         {bannerAsset && (
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
             Custom Image
           </span>
         )}
@@ -383,7 +383,9 @@ export function EditBookmarkDialog({
               type="button"
               variant="secondary"
               size="sm"
-              disabled={isUploadingAsset || isAttachingAsset || isReplacingAsset}
+              disabled={
+                isUploadingAsset || isAttachingAsset || isReplacingAsset
+              }
               onClick={() => imageFileInputRef.current?.click()}
             >
               <ImagePlus className="mr-1.5 size-3.5" />
@@ -510,7 +512,9 @@ export function EditBookmarkDialog({
             {initialFocusField === "image" && renderImageSection()}
             {initialFocusField === "title" && renderTitleField()}
             {initialFocusField === "url" && isLink && renderUrlField()}
-            {initialFocusField === "description" && isLink && renderDescriptionField()}
+            {initialFocusField === "description" &&
+              isLink &&
+              renderDescriptionField()}
 
             {/* If no specific field selected, render full editor form */}
             {!initialFocusField && (
@@ -606,7 +610,9 @@ export function EditBookmarkDialog({
                       name="publisher"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t("bookmark_editor.publisher")}</FormLabel>
+                          <FormLabel>
+                            {t("bookmark_editor.publisher")}
+                          </FormLabel>
                           <FormControl>
                             <Input
                               placeholder="Publisher name"
@@ -641,7 +647,9 @@ export function EditBookmarkDialog({
                                 {field.value ? (
                                   format(field.value, "PPP")
                                 ) : (
-                                  <span>{t("bookmark_editor.pick_a_date")}</span>
+                                  <span>
+                                    {t("bookmark_editor.pick_a_date")}
+                                  </span>
                                 )}
                                 <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                               </Button>
@@ -653,7 +661,8 @@ export function EditBookmarkDialog({
                               selected={field.value}
                               onSelect={field.onChange}
                               disabled={(date) =>
-                                date > new Date() || date < new Date("1900-01-01")
+                                date > new Date() ||
+                                date < new Date("1900-01-01")
                               }
                             />
                           </PopoverContent>
@@ -685,19 +694,27 @@ export function EditBookmarkDialog({
                                   {field.value ? (
                                     format(field.value, "PPP")
                                   ) : (
-                                    <span>{t("bookmark_editor.pick_a_date")}</span>
+                                    <span>
+                                      {t("bookmark_editor.pick_a_date")}
+                                    </span>
                                   )}
                                   <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
                               <Calendar
                                 mode="single"
                                 selected={field.value ?? undefined}
-                                onSelect={(date) => field.onChange(date ?? null)}
+                                onSelect={(date) =>
+                                  field.onChange(date ?? null)
+                                }
                                 disabled={(date) =>
-                                  date > new Date() || date < new Date("1900-01-01")
+                                  date > new Date() ||
+                                  date < new Date("1900-01-01")
                                 }
                               />
                             </PopoverContent>

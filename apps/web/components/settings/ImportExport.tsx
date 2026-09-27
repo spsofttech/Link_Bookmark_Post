@@ -50,7 +50,9 @@ function ImportCard({
 
 function ExportButton() {
   const { t } = useTranslation();
-  const [format, setFormat] = useState<"excel" | "csv" | "json" | "netscape">("excel");
+  const [format, setFormat] = useState<"excel" | "csv" | "json" | "netscape">(
+    "excel",
+  );
   const queryClient = useQueryClient();
   const { isFetching, refetch, error } = useQuery({
     queryKey: ["exportBookmarks"],

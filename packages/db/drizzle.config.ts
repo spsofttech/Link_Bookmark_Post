@@ -29,4 +29,3 @@ export default {
     url: databaseURL,
   },
 } satisfies Config;
-

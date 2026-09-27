@@ -85,7 +85,9 @@ export function useBookmarkImport() {
       const directResult = await directImportBookmarks({
         listName: t("settings.import.imported_bookmarks"),
         bookmarks: parsedImport.bookmarks.map((b) => ({
-          type: (b.content?.type === "text" ? "text" : "link") as "link" | "text",
+          type: (b.content?.type === "text" ? "text" : "link") as
+            | "link"
+            | "text",
           url: b.content?.type === "link" ? b.content.url : undefined,
           title: b.title,
           content: b.content?.type === "text" ? b.content.text : undefined,
@@ -101,7 +103,9 @@ export function useBookmarkImport() {
       });
 
       // Invalidate queries so dashboard and lists update immediately
-      await queryClient.invalidateQueries(api.bookmarks.getBookmarks.queryFilter());
+      await queryClient.invalidateQueries(
+        api.bookmarks.getBookmarks.queryFilter(),
+      );
       await queryClient.invalidateQueries(api.lists.list.queryFilter());
       await queryClient.invalidateQueries(api.lists.stats.queryFilter());
 

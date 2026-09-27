@@ -633,24 +633,126 @@ function parseOneTabFile(textContent: string): ParsedBookmark[] {
 }
 
 function deduplicateBookmarks(bookmarks: ParsedBookmark[]): ParsedBookmark[] {
-  const seen = new Set<string>();
-  const result: ParsedBookmark[] = [];
+  const urlMap = new Map<string, ParsedBookmark>();
+  const nonUrlBookmarks: ParsedBookmark[] = [];
 
   for (const bookmark of bookmarks) {
-    const url = bookmark.content?.type === BookmarkTypes.LINK ? bookmark.content.url : "";
-    const key = `${url}::${bookmark.title}::${bookmark.notes ?? ""}::${bookmark.tags.join(",")}`;
-    if (seen.has(key)) {
+    const url =
+      bookmark.content?.type === BookmarkTypes.LINK
+        ? bookmark.content.url.trim()
+        : null;
+
+    if (!url) {
+      nonUrlBookmarks.push(bookmark);
       continue;
     }
-    seen.add(key);
-    result.push(bookmark);
+
+    const existing = urlMap.get(url);
+    if (!existing) {
+      urlMap.set(url, {
+        ...bookmark,
+        tags: [...(bookmark.tags ?? [])],
+        paths: (bookmark.paths ?? []).map((p) => [...p]),
+        lists: bookmark.lists ? [...bookmark.lists] : undefined,
+        listExternalIds: bookmark.listExternalIds
+          ? [...bookmark.listExternalIds]
+          : undefined,
+      });
+      continue;
+    }
+
+    // Merge metadata into existing
+    if (!existing.title && bookmark.title) {
+      existing.title = bookmark.title;
+    }
+
+    // Merge tags
+    if (bookmark.tags) {
+      for (const tag of bookmark.tags) {
+        if (tag && !existing.tags.includes(tag)) {
+          existing.tags.push(tag);
+        }
+      }
+    }
+
+    // Merge paths
+    if (bookmark.paths) {
+      for (const newPath of bookmark.paths) {
+        const pathExists = existing.paths.some(
+          (p) =>
+            p.length === newPath.length &&
+            p.every((segment, idx) => segment === newPath[idx]),
+        );
+        if (!pathExists) {
+          existing.paths.push([...newPath]);
+        }
+      }
+    }
+
+    // Merge list external IDs / lists
+    if (bookmark.listExternalIds) {
+      existing.listExternalIds = existing.listExternalIds ?? [];
+      for (const id of bookmark.listExternalIds) {
+        if (!existing.listExternalIds.includes(id)) {
+          existing.listExternalIds.push(id);
+        }
+      }
+    }
+    if (bookmark.lists) {
+      existing.lists = existing.lists ?? [];
+      for (const l of bookmark.lists) {
+        if (!existing.lists.includes(l)) {
+          existing.lists.push(l);
+        }
+      }
+    }
+
+    // Keep earlier addDate
+    if (bookmark.addDate !== undefined) {
+      if (
+        existing.addDate === undefined ||
+        bookmark.addDate < existing.addDate
+      ) {
+        existing.addDate = bookmark.addDate;
+      }
+    }
+
+    // Merge notes
+    if (bookmark.notes && bookmark.notes.trim()) {
+      if (!existing.notes) {
+        existing.notes = bookmark.notes;
+      } else if (!existing.notes.includes(bookmark.notes.trim())) {
+        existing.notes = `${existing.notes}\n\n${bookmark.notes.trim()}`;
+      }
+    }
+
+    // Merge description, image, archived, favourited
+    if (!existing.description && bookmark.description) {
+      existing.description = bookmark.description;
+    }
+    if (!existing.imageUrl && bookmark.imageUrl) {
+      existing.imageUrl = bookmark.imageUrl;
+    }
+    if (existing.archived === undefined && bookmark.archived !== undefined) {
+      existing.archived = bookmark.archived;
+    }
+    if (
+      existing.favourited === undefined &&
+      bookmark.favourited !== undefined
+    ) {
+      existing.favourited = bookmark.favourited;
+    }
   }
 
-  return result;
+  return [...urlMap.values(), ...nonUrlBookmarks];
 }
 
-function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | null {
+function extractUniversalRecord(
+  record: Record<string, unknown>,
+): ParsedBookmark | null {
   if (!record || typeof record !== "object") return null;
+
+  const recordContent = record.content as Record<string, unknown> | undefined;
 
   // 1. Extract URL
   const rawUrl =
@@ -664,7 +766,7 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     record.Link ||
     record.href ||
     record.website ||
-    record.content?.url ||
+    recordContent?.url ||
     "";
   const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
 
@@ -672,7 +774,7 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
   const rawText =
     record["Text Content"] ||
     record["text content"] ||
-    record.content?.text ||
+    recordContent?.text ||
     record.textContent ||
     record.text ||
     record.Text ||
@@ -692,15 +794,28 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
   const cleanLines = rawLines
     .map((l) =>
       l
-        .replace(/^[•\s\-\*“"']+/, "")
-        .replace(/[”"']+$/, "")
+        .replace(/^[•\s-*"']+/, "")
+        .replace(/["']+$/, "")
         .trim(),
     )
     .filter(Boolean);
 
   let title = "";
-  if (record.title || record.Title || record.name || record.Name || record.Subject || record.headline) {
-    const rawTitle = record.title || record.Title || record.name || record.Name || record.Subject || record.headline;
+  if (
+    record.title ||
+    record.Title ||
+    record.name ||
+    record.Name ||
+    record.Subject ||
+    record.headline
+  ) {
+    const rawTitle =
+      record.title ||
+      record.Title ||
+      record.name ||
+      record.Name ||
+      record.Subject ||
+      record.headline;
     title = String(rawTitle).trim().split("\n")[0].slice(0, 200);
   } else if (cleanLines.length > 0) {
     title = cleanLines[0].slice(0, 200);
@@ -719,23 +834,73 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
       record.summary ||
       record.Summary ||
       record.Snippet ||
-      record.content?.description ||
+      recordContent?.description ||
       "",
   ).trim();
 
   // 5. Extract Notes and ALL extra raw columns without loss
   const standardFields = new Set([
-    "no.", "no", "id", "type", "title", "name", "headline", "subject",
-    "url", "link", "original post link", "original post link / url", "original link", "post link", "href", "website",
-    "text content", "text", "body", "post", "content", "textcontent",
-    "description", "desc", "summary", "snippet",
-    "note", "notes", "note / takeaways", "takeaway", "core idea / 1-line takeaway", "comments",
-    "tags", "tags / categories", "category", "categories", "labels", "platform", "post type",
-    "status", "archived", "state",
-    "favourited", "favorite", "starred", "star",
-    "date saved", "date", "createdat", "created at", "time_added", "adddate",
-    "thumbnail", "realthumb", "image", "imageurl", "thumb",
-    "lists", "list", "folder", "paths"
+    "no.",
+    "no",
+    "id",
+    "type",
+    "title",
+    "name",
+    "headline",
+    "subject",
+    "url",
+    "link",
+    "original post link",
+    "original post link / url",
+    "original link",
+    "post link",
+    "href",
+    "website",
+    "text content",
+    "text",
+    "body",
+    "post",
+    "content",
+    "textcontent",
+    "description",
+    "desc",
+    "summary",
+    "snippet",
+    "note",
+    "notes",
+    "note / takeaways",
+    "takeaway",
+    "core idea / 1-line takeaway",
+    "comments",
+    "tags",
+    "tags / categories",
+    "category",
+    "categories",
+    "labels",
+    "platform",
+    "post type",
+    "status",
+    "archived",
+    "state",
+    "favourited",
+    "favorite",
+    "starred",
+    "star",
+    "date saved",
+    "date",
+    "createdat",
+    "created at",
+    "time_added",
+    "adddate",
+    "thumbnail",
+    "realthumb",
+    "image",
+    "imageurl",
+    "thumb",
+    "lists",
+    "list",
+    "folder",
+    "paths",
   ]);
 
   const noteParts: string[] = [];
@@ -758,7 +923,8 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     if (val === null || val === undefined || val === "") continue;
     const cleanKey = key.trim().toLowerCase();
     if (!standardFields.has(cleanKey)) {
-      const displayVal = typeof val === "object" ? JSON.stringify(val) : String(val).trim();
+      const displayVal =
+        typeof val === "object" ? JSON.stringify(val) : String(val).trim();
       noteParts.push(`${key.trim()}: ${displayVal}`);
     }
   }
@@ -782,7 +948,10 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
       if (s && !tags.includes(s)) tags.push(s);
     }
   } else if (typeof rawTags === "string") {
-    for (const s of rawTags.split(/[,|;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    for (const s of rawTags
+      .split(/[,|;\n]/)
+      .map((x) => x.trim())
+      .filter(Boolean)) {
       if (!tags.includes(s)) tags.push(s);
     }
   }
@@ -807,7 +976,10 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
       if (s && !lists.includes(s)) lists.push(s);
     }
   } else if (typeof rawLists === "string") {
-    for (const s of rawLists.split(/[,|;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    for (const s of rawLists
+      .split(/[,|;\n]/)
+      .map((x) => x.trim())
+      .filter(Boolean)) {
       if (!lists.includes(s)) lists.push(s);
     }
   }
@@ -823,7 +995,10 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
   let addDate: number | undefined;
   if (addDateStr !== undefined && addDateStr !== null && addDateStr !== "") {
     if (typeof addDateStr === "number") {
-      addDate = addDateStr > 1e11 ? Math.floor(addDateStr / 1000) : Math.floor(addDateStr);
+      addDate =
+        addDateStr > 1e11
+          ? Math.floor(addDateStr / 1000)
+          : Math.floor(addDateStr);
     } else {
       const num = Number(addDateStr);
       if (!isNaN(num) && num > 1e8) {
@@ -838,9 +1013,7 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
   }
 
   // 9. Archived / Status
-  const statusStr = String(
-    record.Status || record.status || "",
-  ).toLowerCase();
+  const statusStr = String(record.Status || record.status || "").toLowerCase();
   const archived =
     statusStr === "archived" ||
     statusStr === "true" ||
@@ -849,7 +1022,13 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
 
   // 10. Favourited
   const favStr = String(
-    record.Favourited || record.favourited || record.Favorite || record.favorite || record.Starred || record.starred || "",
+    record.Favourited ||
+      record.favourited ||
+      record.Favorite ||
+      record.favorite ||
+      record.Starred ||
+      record.starred ||
+      "",
   ).toLowerCase();
   const favourited =
     favStr === "yes" ||
@@ -865,7 +1044,7 @@ function extractUniversalRecord(record: Record<string, any>): ParsedBookmark | n
     record.realThumb ||
     record.imageUrl ||
     record.image ||
-    record.content?.imageUrl ||
+    recordContent?.imageUrl ||
     "";
   const imageUrl = typeof rawImage === "string" ? rawImage.trim() : undefined;
 
@@ -904,7 +1083,7 @@ export function parseUniversalExcelBuffer(
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
-    const records = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
       defval: "",
       raw: false,
     });
@@ -920,7 +1099,7 @@ export function parseUniversalExcelBuffer(
 }
 
 function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
-  let records: Record<string, any>[];
+  let records: Record<string, unknown>[];
   try {
     records = parse(textContent, {
       columns: true,
@@ -928,15 +1107,17 @@ function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
       trim: true,
       relax_column_count: true,
     });
-  } catch (e) {
+  } catch {
     // Fallback: try parsing with XLSX
     try {
       const workbook = XLSX.read(textContent, { type: "string" });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      records = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet, { defval: "" });
-    } catch {
+      records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
+        defval: "",
+      });
+    } catch (fallbackErr) {
       throw new Error(
-        `Failed to parse CSV file: ${(e as Error).message}`,
+        `Failed to parse CSV file: ${(fallbackErr as Error).message}`,
       );
     }
   }
@@ -951,20 +1132,28 @@ function parseUniversalCsvFile(textContent: string): ParsedBookmark[] {
 }
 
 function parseUniversalJsonFile(textContent: string): ParsedBookmark[] {
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(textContent);
-  } catch (e) {
+  } catch {
     throw new Error("Invalid JSON file format.");
   }
 
-  const records: any[] = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray(parsed.bookmarks)
-      ? parsed.bookmarks
-      : Array.isArray(parsed.records)
-        ? parsed.records
-        : [parsed];
+  const records: Record<string, unknown>[] = Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>[])
+    : typeof parsed === "object" && parsed !== null
+      ? Array.isArray((parsed as Record<string, unknown>).bookmarks)
+        ? ((parsed as Record<string, unknown>).bookmarks as Record<
+            string,
+            unknown
+          >[])
+        : Array.isArray((parsed as Record<string, unknown>).records)
+          ? ((parsed as Record<string, unknown>).records as Record<
+              string,
+              unknown
+            >[])
+          : [parsed as Record<string, unknown>]
+      : [];
 
   const bookmarks: ParsedBookmark[] = [];
   for (const record of records) {
@@ -993,8 +1182,13 @@ export function parseImportFile(
       try {
         const workbook = XLSX.read(textContent, { type: "string" });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const records = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet, { defval: "" });
-        result = records.map(extractUniversalRecord).filter((b): b is ParsedBookmark => b !== null);
+        const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+          firstSheet,
+          { defval: "" },
+        );
+        result = records
+          .map(extractUniversalRecord)
+          .filter((b): b is ParsedBookmark => b !== null);
       } catch {
         result = parseUniversalCsvFile(textContent);
       }

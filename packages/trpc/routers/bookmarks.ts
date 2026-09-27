@@ -273,7 +273,12 @@ export const bookmarksAppRouter = router({
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
       if (input.bookmarks.length === 0) {
-        return { importedCount: 0, skippedCount: 0, total: 0, rootListId: null };
+        return {
+          importedCount: 0,
+          skippedCount: 0,
+          total: 0,
+          rootListId: null,
+        };
       }
 
       // 1. Find or create root list if listName is specified
@@ -344,7 +349,13 @@ export const bookmarksAppRouter = router({
           (tx) => {
             for (const item of batch) {
               const rawUrl = item.url?.trim();
-              if (item.type === "link" && !rawUrl && !item.title && !item.content && !item.note) {
+              if (
+                item.type === "link" &&
+                !rawUrl &&
+                !item.title &&
+                !item.content &&
+                !item.note
+              ) {
                 skippedCount++;
                 continue;
               }
