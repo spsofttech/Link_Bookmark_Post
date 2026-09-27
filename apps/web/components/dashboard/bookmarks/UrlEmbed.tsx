@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ExternalLink, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function getEmbedInfo(urlStr: string): {
   embedUrl: string;
@@ -88,15 +89,22 @@ export function UrlEmbed({
   if (!embedInfo) return null;
 
   return (
-    <div className={`relative w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm ${className ?? ""}`}>
-      <div className="flex items-center justify-between border-b px-3 py-1.5 text-xs text-muted-foreground bg-muted/40">
-        <span className="truncate font-mono text-[11px] max-w-[80%]">{url}</span>
+    <div
+      className={cn(
+        "relative flex size-full min-h-[11rem] flex-col overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm",
+        className,
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between border-b bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+        <span className="max-w-[75%] truncate font-mono text-[11px]">
+          {url}
+        </span>
         <div className="flex items-center gap-1.5">
           <a
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 hover:text-foreground text-[11px]"
+            className="inline-flex items-center gap-1 text-[11px] hover:text-foreground"
             title="Open link in new tab"
           >
             <ExternalLink className="size-3" />
@@ -117,7 +125,7 @@ export function UrlEmbed({
           )}
         </div>
       </div>
-      <div className="relative aspect-video w-full bg-black/90">
+      <div className="relative size-full min-h-0 flex-1 bg-black/90">
         {!loadError ? (
           <iframe
             src={embedInfo.embedUrl}
@@ -130,7 +138,9 @@ export function UrlEmbed({
           />
         ) : (
           <div className="flex size-full flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
-            <p className="mb-2 font-medium">This site does not allow iframe embedding.</p>
+            <p className="mb-2 font-medium">
+              This site does not allow iframe embedding.
+            </p>
             <a
               href={url}
               target="_blank"

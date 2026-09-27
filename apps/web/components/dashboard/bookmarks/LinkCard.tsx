@@ -39,13 +39,29 @@ function LinkImage({
   bookmark,
   className,
   onEditImage,
+  showEmbed,
+  onToggleEmbed,
 }: {
   bookmark: ZBookmarkTypeLink;
   className?: string;
   onEditImage?: () => void;
+  showEmbed: boolean;
+  onToggleEmbed: () => void;
 }) {
   const { onClickUrl, urlTarget } = useOnClickUrl(bookmark);
   const link = bookmark.content;
+
+  if (showEmbed) {
+    return (
+      <div className={cn("relative size-full min-h-[11rem] flex-1", className)}>
+        <UrlEmbed
+          url={link.url}
+          onClose={onToggleEmbed}
+          className="size-full"
+        />
+      </div>
+    );
+  }
 
   const imgComponent = (url: string, unoptimized: boolean) => (
     <Image
@@ -73,7 +89,12 @@ function LinkImage({
   }
 
   return (
-    <div className={cn("group/image relative size-full flex-1", className)}>
+    <div
+      className={cn(
+        "group/image relative size-full min-h-[11rem] flex-1",
+        className,
+      )}
+    >
       <Link
         href={onClickUrl}
         target={urlTarget}
@@ -82,6 +103,19 @@ function LinkImage({
       >
         <div className="relative size-full flex-1">{img}</div>
       </Link>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleEmbed();
+        }}
+        className="absolute left-2 top-2 z-40 inline-flex items-center gap-1.5 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white shadow-md backdrop-blur-md transition-all hover:scale-105 hover:bg-black/90"
+        title="View Embedded Content at Thumb Position"
+      >
+        <Tv className="size-3.5 text-blue-400" />
+        <span>Embed</span>
+      </button>
       {onEditImage && (
         <button
           type="button"
@@ -104,12 +138,15 @@ function LinkImage({
 function LinkCardContent({
   bookmark,
   onEditField,
+  showEmbed,
+  onToggleEmbed,
 }: {
   bookmark: ZBookmarkTypeLink;
   onEditField?: (field: "title" | "url" | "description") => void;
+  showEmbed: boolean;
+  onToggleEmbed: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showEmbed, setShowEmbed] = useState(false);
   const { onClickUrl, urlTarget } = useOnClickUrl(bookmark);
 
   const url = bookmark.content.url;
@@ -140,7 +177,7 @@ function LinkCardContent({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              setShowEmbed(!showEmbed);
+              onToggleEmbed();
             }}
             className={cn(
               "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors",
@@ -148,7 +185,7 @@ function LinkCardContent({
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted/70 text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
-            title="Toggle Embedded View"
+            title="Toggle Embedded View at Thumb Position"
           >
             <Tv className="size-3" />
             <span>{showEmbed ? "Hide Embed" : "Embed"}</span>
@@ -170,18 +207,6 @@ function LinkCardContent({
           )}
         </div>
       </div>
-
-      {showEmbed && (
-        <div
-          role="region"
-          aria-label="Embedded URL View"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          className="my-1.5"
-        >
-          <UrlEmbed url={url} onClose={() => setShowEmbed(false)} />
-        </div>
-      )}
 
       {/* 2. Title below URL with inline edit button (MAX 1 LINE, no deadspace) */}
       {showTitle ? (
@@ -318,6 +343,7 @@ export default function LinkCard({
   bookmarkIndex?: number;
 }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [showEmbed, setShowEmbed] = useState(false);
   const [focusField, setFocusField] = useState<
     "image" | "title" | "url" | "description" | null
   >(null);
@@ -329,6 +355,10 @@ export default function LinkCard({
     setEditDialogOpen(true);
   };
 
+  const handleToggleEmbed = () => {
+    setShowEmbed((prev) => !prev);
+  };
+
   return (
     <>
       <BookmarkLayoutAdaptingCard
@@ -337,6 +367,8 @@ export default function LinkCard({
           <LinkCardContent
             bookmark={bookmarkLink}
             onEditField={handleEditField}
+            showEmbed={showEmbed}
+            onToggleEmbed={handleToggleEmbed}
           />
         }
         footer={<FooterLinkURL url={getSourceUrl(bookmarkLink)} />}
@@ -347,6 +379,8 @@ export default function LinkCard({
             className={className}
             bookmark={bookmarkLink}
             onEditImage={() => handleEditField("image")}
+            showEmbed={showEmbed}
+            onToggleEmbed={handleToggleEmbed}
           />
         )}
         className={className}
