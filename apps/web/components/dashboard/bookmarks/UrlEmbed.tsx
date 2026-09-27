@@ -1,23 +1,108 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, Github, Globe, Instagram, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function getEmbedInfo(urlStr: string): {
-  embedUrl: string;
-  type:
-    | "youtube"
-    | "vimeo"
-    | "instagram"
-    | "spotify"
-    | "google-docs"
-    | "twitter"
-    | "iframe";
-} | null {
+export type EmbedInfo =
+  | { type: "youtube"; embedUrl: string }
+  | { type: "vimeo"; embedUrl: string }
+  | { type: "instagram"; embedUrl: string }
+  | { type: "instagram-profile"; embedUrl: string; username: string }
+  | { type: "threads"; embedUrl: string; postId?: string }
+  | { type: "spotify"; embedUrl: string }
+  | { type: "google-docs"; embedUrl: string }
+  | { type: "twitter"; embedUrl: string }
+  | { type: "github"; embedUrl: string; owner: string; repo: string }
+  | { type: "card"; embedUrl: string; domain: string }
+  | { type: "iframe"; embedUrl: string };
+
+function isFrameRestrictedHost(host: string, pathname: string): boolean {
+  if (host.includes("linkedin.com")) return true;
+  if (host.includes("medium.com")) return true;
+  if (host.includes("reddit.com")) return true;
+  if (host.includes("facebook.com")) return true;
+  if (host.includes("t.me") || host.includes("telegram.org")) return true;
+  if (host.includes("threads.com") && !pathname.includes("/share/"))
+    return true;
+  if (
+    host.includes("threads.net") &&
+    !pathname.includes("/t/") &&
+    !pathname.includes("/share/")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function getEmbedInfo(urlStr: string): EmbedInfo | null {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.replace("www.", "").toLowerCase();
+
+    // GitHub Repositories
+    if (host.includes("github.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length >= 2) {
+        return {
+          type: "github",
+          embedUrl: urlStr,
+          owner: parts[0],
+          repo: parts[1],
+        };
+      }
+      return {
+        type: "card",
+        embedUrl: urlStr,
+        domain: "github.com",
+      };
+    }
+
+    // Threads Posts & Profiles
+    if (host.includes("threads.net") || host.includes("threads.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      let postId = "";
+      if (parts[0] === "share" && parts[1]) {
+        postId = parts[1];
+      } else if (parts[0] === "t" && parts[1]) {
+        postId = parts[1];
+      } else if (parts.length >= 3 && parts[1] === "post") {
+        postId = parts[2];
+      }
+      if (postId) {
+        return {
+          type: "threads",
+          embedUrl: `https://www.threads.net/t/${postId}/embed`,
+          postId,
+        };
+      }
+      return {
+        type: "card",
+        embedUrl: urlStr,
+        domain: "threads.net",
+      };
+    }
+
+    // Instagram Posts & Profiles
+    if (host.includes("instagram.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if ((parts[0] === "p" || parts[0] === "reel") && parts[1]) {
+        return {
+          type: "instagram",
+          embedUrl: `https://www.instagram.com/${parts[0]}/${parts[1]}/embed`,
+        };
+      }
+      if (
+        parts[0] &&
+        !["explore", "reels", "stories", "direct"].includes(parts[0])
+      ) {
+        return {
+          type: "instagram-profile",
+          embedUrl: urlStr,
+          username: parts[0],
+        };
+      }
+    }
 
     // Google Docs, Sheets, Slides
     if (host.includes("docs.google.com")) {
@@ -94,17 +179,6 @@ export function getEmbedInfo(urlStr: string): {
       }
     }
 
-    // Instagram
-    if (host.includes("instagram.com")) {
-      const parts = url.pathname.split("/").filter(Boolean);
-      if ((parts[0] === "p" || parts[0] === "reel") && parts[1]) {
-        return {
-          embedUrl: `https://www.instagram.com/${parts[0]}/${parts[1]}/embed`,
-          type: "instagram",
-        };
-      }
-    }
-
     // Spotify
     if (host.includes("spotify.com")) {
       const parts = url.pathname.split("/").filter(Boolean);
@@ -116,7 +190,14 @@ export function getEmbedInfo(urlStr: string): {
       }
     }
 
-    // Default iframe embed for web URL (Notion, GitHub, blogs, etc.)
+    if (isFrameRestrictedHost(host, url.pathname)) {
+      return {
+        type: "card",
+        embedUrl: urlStr,
+        domain: host,
+      };
+    }
+
     return {
       embedUrl: urlStr,
       type: "iframe",
@@ -124,6 +205,120 @@ export function getEmbedInfo(urlStr: string): {
   } catch {
     return null;
   }
+}
+
+function GitHubEmbedCard({
+  owner,
+  repo,
+  url,
+}: {
+  owner: string;
+  repo: string;
+  url: string;
+}) {
+  return (
+    <div className="flex size-full flex-col justify-between bg-slate-950 p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Github className="size-5 text-purple-400" />
+          <span className="text-xs font-semibold tracking-wide text-purple-300">
+            GitHub Repository
+          </span>
+        </div>
+        <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-300">
+          github.com
+        </span>
+      </div>
+      <div className="my-1.5">
+        <h4 className="truncate text-sm font-bold text-white">
+          {owner} / <span className="text-purple-400">{repo}</span>
+        </h4>
+        <p className="line-clamp-1 text-[11px] text-slate-400">
+          View code, issues, & releases on GitHub
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-purple-500"
+      >
+        <span>Open Repository</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
+}
+
+function InstagramProfileCard({
+  username,
+  url,
+}: {
+  username: string;
+  url: string;
+}) {
+  return (
+    <div className="flex size-full flex-col justify-between bg-gradient-to-br from-purple-900 via-pink-900 to-rose-950 p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Instagram className="size-5 text-pink-300" />
+          <span className="text-xs font-semibold tracking-wide text-pink-200">
+            Instagram Profile
+          </span>
+        </div>
+        <span className="rounded bg-black/40 px-2 py-0.5 font-mono text-[10px] text-pink-200">
+          instagram.com
+        </span>
+      </div>
+      <div className="my-1.5">
+        <h4 className="truncate text-sm font-bold text-white">@{username}</h4>
+        <p className="line-clamp-1 text-[11px] text-pink-200/80">
+          View photos & reels on Instagram
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-pink-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-pink-500"
+      >
+        <span>View Profile</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
+}
+
+function WebCard({ url, domain }: { url: string; domain: string }) {
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  return (
+    <div className="flex size-full flex-col justify-between bg-slate-900 p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={faviconUrl} alt="favicon" className="size-4 rounded" />
+          <span className="text-xs font-semibold tracking-wide text-slate-300">
+            {domain}
+          </span>
+        </div>
+        <Globe className="size-4 text-slate-400" />
+      </div>
+      <div className="my-1">
+        <p className="line-clamp-2 break-all font-mono text-[11px] text-slate-300">
+          {url}
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-500"
+      >
+        <span>Open Link</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
 }
 
 export function UrlEmbed({
@@ -139,6 +334,51 @@ export function UrlEmbed({
   const embedInfo = getEmbedInfo(url);
 
   if (!embedInfo) return null;
+
+  let embedContent: React.ReactNode = null;
+
+  if (loadError) {
+    let domain = "web";
+    try {
+      domain = new URL(url).hostname.replace("www.", "");
+    } catch {
+      domain = url;
+    }
+    embedContent = <WebCard url={url} domain={domain} />;
+  } else {
+    switch (embedInfo.type) {
+      case "github":
+        embedContent = (
+          <GitHubEmbedCard
+            owner={embedInfo.owner}
+            repo={embedInfo.repo}
+            url={url}
+          />
+        );
+        break;
+      case "instagram-profile":
+        embedContent = (
+          <InstagramProfileCard username={embedInfo.username} url={url} />
+        );
+        break;
+      case "card":
+        embedContent = <WebCard url={url} domain={embedInfo.domain} />;
+        break;
+      default:
+        embedContent = (
+          <iframe
+            src={embedInfo.embedUrl}
+            className="size-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+            loading="lazy"
+            onError={() => setLoadError(true)}
+          />
+        );
+        break;
+    }
+  }
 
   return (
     <div
@@ -178,31 +418,7 @@ export function UrlEmbed({
         </div>
       </div>
       <div className="relative size-full min-h-0 flex-1 bg-black/90">
-        {!loadError ? (
-          <iframe
-            src={embedInfo.embedUrl}
-            className="size-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-            loading="lazy"
-            onError={() => setLoadError(true)}
-          />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center p-4 text-center text-xs text-muted-foreground">
-            <p className="mb-2 font-medium">
-              This site does not allow iframe embedding.
-            </p>
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
-            >
-              Open Original Page <ExternalLink className="size-3" />
-            </a>
-          </div>
-        )}
+        {embedContent}
       </div>
     </div>
   );
