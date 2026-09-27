@@ -14,6 +14,7 @@ export type EmbedInfo =
   | { type: "google-docs"; embedUrl: string }
   | { type: "twitter"; embedUrl: string }
   | { type: "github"; embedUrl: string; owner: string; repo: string }
+  | { type: "notion"; embedUrl: string; domain: string }
   | { type: "card"; embedUrl: string; domain: string }
   | { type: "iframe"; embedUrl: string };
 
@@ -23,6 +24,7 @@ function isFrameRestrictedHost(host: string, pathname: string): boolean {
   if (host.includes("reddit.com")) return true;
   if (host.includes("facebook.com")) return true;
   if (host.includes("t.me") || host.includes("telegram.org")) return true;
+  if (host.includes("notion.site") || host.includes("notion.so")) return true;
   if (host.includes("threads.com") && !pathname.includes("/share/"))
     return true;
   if (
@@ -39,6 +41,15 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.replace("www.", "").toLowerCase();
+
+    // Notion Pages & Workspaces
+    if (host.includes("notion.site") || host.includes("notion.so")) {
+      return {
+        type: "notion",
+        embedUrl: urlStr,
+        domain: host,
+      };
+    }
 
     // GitHub Repositories
     if (host.includes("github.com")) {
@@ -142,7 +153,7 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
     // X / Twitter
     if (host.includes("twitter.com") || host.includes("x.com")) {
       return {
-        embedUrl: `https://platform.twitter.com/embed/Tweet.html?url=${encodeURIComponent(urlStr)}`,
+        embedUrl: `https://twitframe.com/show?url=${encodeURIComponent(urlStr)}`,
         type: "twitter",
       };
     }
@@ -205,6 +216,93 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
   } catch {
     return null;
   }
+}
+
+function NotionEmbedCard({ url, domain }: { url: string; domain: string }) {
+  let title = "Notion Workspace";
+  try {
+    const parts = new URL(url).pathname.split("/").filter(Boolean);
+    if (parts[0]) {
+      title = parts[0].replace(/-/g, " ");
+    }
+  } catch {
+    title = "Notion Page";
+  }
+  return (
+    <div className="flex size-full flex-col justify-between bg-stone-950 p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-white px-1.5 py-0.5 text-xs font-bold text-black">
+            N
+          </span>
+          <span className="text-xs font-semibold tracking-wide text-stone-300">
+            Notion
+          </span>
+        </div>
+        <span className="rounded bg-stone-800 px-2 py-0.5 font-mono text-[10px] text-stone-400">
+          {domain}
+        </span>
+      </div>
+      <div className="my-1.5">
+        <h4 className="line-clamp-1 text-sm font-bold capitalize text-stone-100">
+          {title}
+        </h4>
+        <p className="line-clamp-1 text-[11px] text-stone-400">
+          View page & documents on Notion
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-stone-100 px-3 py-1 text-xs font-medium text-stone-900 transition-colors hover:bg-white"
+      >
+        <span>Open Notion Page</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
+}
+
+function TwitterEmbedCard({ url }: { url: string }) {
+  let handle = "X / Twitter";
+  try {
+    const parts = new URL(url).pathname.split("/").filter(Boolean);
+    if (parts[0]) {
+      handle = `@${parts[0]}`;
+    }
+  } catch {
+    handle = "X / Twitter";
+  }
+  return (
+    <div className="flex size-full flex-col justify-between bg-black p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-bold text-sky-400">𝕏</span>
+          <span className="text-xs font-semibold tracking-wide text-slate-300">
+            {handle}
+          </span>
+        </div>
+        <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-400">
+          x.com
+        </span>
+      </div>
+      <div className="my-1.5">
+        <p className="line-clamp-2 text-xs text-slate-300">
+          View post & comments on X (Twitter)
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-500 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-400"
+      >
+        <span>Open Post on X</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
 }
 
 function GitHubEmbedCard({
@@ -338,15 +436,22 @@ export function UrlEmbed({
   let embedContent: React.ReactNode = null;
 
   if (loadError) {
-    let domain = "web";
-    try {
-      domain = new URL(url).hostname.replace("www.", "");
-    } catch {
-      domain = url;
+    if (embedInfo.type === "twitter") {
+      embedContent = <TwitterEmbedCard url={url} />;
+    } else {
+      let domain = "web";
+      try {
+        domain = new URL(url).hostname.replace("www.", "");
+      } catch {
+        domain = url;
+      }
+      embedContent = <WebCard url={url} domain={domain} />;
     }
-    embedContent = <WebCard url={url} domain={domain} />;
   } else {
     switch (embedInfo.type) {
+      case "notion":
+        embedContent = <NotionEmbedCard url={url} domain={embedInfo.domain} />;
+        break;
       case "github":
         embedContent = (
           <GitHubEmbedCard
