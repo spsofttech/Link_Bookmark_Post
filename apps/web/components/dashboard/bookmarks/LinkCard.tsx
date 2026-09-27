@@ -343,7 +343,9 @@ export default function LinkCard({
   bookmarkIndex?: number;
 }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [showEmbed, setShowEmbed] = useState(false);
+  const imageDetails = getBookmarkLinkImageUrl(bookmarkLink.content);
+  // Auto-embed URL at thumb position if post has no custom cover image
+  const [showEmbed, setShowEmbed] = useState(() => !imageDetails);
   const [focusField, setFocusField] = useState<
     "image" | "title" | "url" | "description" | null
   >(null);

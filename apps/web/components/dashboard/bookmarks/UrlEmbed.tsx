@@ -6,11 +6,61 @@ import { cn } from "@/lib/utils";
 
 export function getEmbedInfo(urlStr: string): {
   embedUrl: string;
-  type: "youtube" | "vimeo" | "instagram" | "spotify" | "iframe";
+  type:
+    | "youtube"
+    | "vimeo"
+    | "instagram"
+    | "spotify"
+    | "google-docs"
+    | "twitter"
+    | "iframe";
 } | null {
   try {
     const url = new URL(urlStr);
     const host = url.hostname.replace("www.", "").toLowerCase();
+
+    // Google Docs, Sheets, Slides
+    if (host.includes("docs.google.com")) {
+      if (url.pathname.includes("/document/d/")) {
+        const docId = url.pathname.split("/document/d/")[1]?.split("/")[0];
+        if (docId) {
+          return {
+            embedUrl: `https://docs.google.com/document/d/${docId}/preview`,
+            type: "google-docs",
+          };
+        }
+      }
+      if (url.pathname.includes("/spreadsheets/d/")) {
+        const sheetId = url.pathname
+          .split("/spreadsheets/d/")[1]
+          ?.split("/")[0];
+        if (sheetId) {
+          return {
+            embedUrl: `https://docs.google.com/spreadsheets/d/${sheetId}/preview`,
+            type: "google-docs",
+          };
+        }
+      }
+      if (url.pathname.includes("/presentation/d/")) {
+        const slideId = url.pathname
+          .split("/presentation/d/")[1]
+          ?.split("/")[0];
+        if (slideId) {
+          return {
+            embedUrl: `https://docs.google.com/presentation/d/${slideId}/embed`,
+            type: "google-docs",
+          };
+        }
+      }
+    }
+
+    // X / Twitter
+    if (host.includes("twitter.com") || host.includes("x.com")) {
+      return {
+        embedUrl: `https://platform.twitter.com/embed/Tweet.html?url=${encodeURIComponent(urlStr)}`,
+        type: "twitter",
+      };
+    }
 
     // YouTube
     if (host.includes("youtube.com") || host.includes("youtu.be")) {
@@ -19,6 +69,8 @@ export function getEmbedInfo(urlStr: string): {
         videoId = url.pathname.slice(1);
       } else if (url.pathname.includes("/embed/")) {
         videoId = url.pathname.split("/embed/")[1];
+      } else if (url.pathname.includes("/shorts/")) {
+        videoId = url.pathname.split("/shorts/")[1];
       } else {
         videoId = url.searchParams.get("v") || "";
       }
@@ -64,7 +116,7 @@ export function getEmbedInfo(urlStr: string): {
       }
     }
 
-    // Default iframe embed for web URL
+    // Default iframe embed for web URL (Notion, GitHub, blogs, etc.)
     return {
       embedUrl: urlStr,
       type: "iframe",
