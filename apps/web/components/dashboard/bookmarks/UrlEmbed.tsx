@@ -71,26 +71,9 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
 
     // Threads Posts & Profiles
     if (host.includes("threads.net") || host.includes("threads.com")) {
-      const parts = url.pathname.split("/").filter(Boolean);
-      let postId = "";
-      if (parts[0] === "share" && parts[1]) {
-        postId = parts[1];
-      } else if (parts[0] === "t" && parts[1]) {
-        postId = parts[1];
-      } else if (parts.length >= 3 && parts[1] === "post") {
-        postId = parts[2];
-      }
-      if (postId) {
-        return {
-          type: "threads",
-          embedUrl: `https://www.threads.net/t/${postId}/embed`,
-          postId,
-        };
-      }
       return {
-        type: "card",
+        type: "threads",
         embedUrl: urlStr,
-        domain: "threads.net",
       };
     }
 
@@ -258,6 +241,40 @@ function NotionEmbedCard({ url, domain }: { url: string; domain: string }) {
         className="inline-flex items-center justify-center gap-1.5 rounded-md bg-stone-100 px-3 py-1 text-xs font-medium text-stone-900 transition-colors hover:bg-white"
       >
         <span>Open Notion Page</span>
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  );
+}
+
+function ThreadsEmbedCard({ url }: { url: string }) {
+  return (
+    <div className="flex size-full flex-col justify-between bg-zinc-950 p-3.5 text-white">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex size-5 items-center justify-center rounded-full bg-white text-[11px] font-bold text-black">
+            @
+          </span>
+          <span className="text-xs font-semibold tracking-wide text-zinc-200">
+            Threads Post
+          </span>
+        </div>
+        <span className="rounded bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+          threads.net
+        </span>
+      </div>
+      <div className="my-1.5">
+        <p className="line-clamp-2 text-xs text-zinc-300">
+          View post, images, & discussions on Threads
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-zinc-200"
+      >
+        <span>Open Post on Threads</span>
         <ExternalLink className="size-3" />
       </a>
     </div>
@@ -449,6 +466,9 @@ export function UrlEmbed({
     }
   } else {
     switch (embedInfo.type) {
+      case "threads":
+        embedContent = <ThreadsEmbedCard url={url} />;
+        break;
       case "notion":
         embedContent = <NotionEmbedCard url={url} domain={embedInfo.domain} />;
         break;
