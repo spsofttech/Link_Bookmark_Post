@@ -16,6 +16,8 @@ import { useTranslation } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 import { MoreHorizontal, Plus } from "lucide-react";
 
+import { useQuery } from "@tanstack/react-query";
+import { useTRPC } from "@karakeep/shared-react/trpc";
 import type { ZBookmarkList } from "@karakeep/shared/types/lists";
 import {
   augmentBookmarkListsWithInitialData,
@@ -182,6 +184,12 @@ export default function AllLists({
 
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
+  const api = useTRPC();
+  const { data: userStats } = useQuery({
+    ...api.users.stats.queryOptions(),
+    staleTime: 30_000,
+  });
+
   // Fetch live lists data
   const { data: listsData } = useBookmarkLists(undefined, {
     initialData: { lists: initialData.lists },
@@ -233,6 +241,7 @@ export default function AllLists({
         name={t("lists.all_lists")}
         path={`/dashboard/lists`}
         linkClassName="py-0.5 px-1"
+        count={userStats?.numLists}
         right={<InvitationNotificationBadge />}
       />
       <SidebarItem
@@ -241,6 +250,7 @@ export default function AllLists({
         name={t("lists.favourites")}
         path={`/dashboard/favourites`}
         linkClassName="py-0.5 px-1"
+        count={userStats?.numFavorites}
       />
 
       {/* Owned Lists */}

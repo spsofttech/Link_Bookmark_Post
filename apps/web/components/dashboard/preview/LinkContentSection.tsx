@@ -27,10 +27,12 @@ import {
   FileText,
   Info,
   LayoutPanelTop,
+  Tv,
   Video,
 } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { ErrorBoundary } from "react-error-boundary";
+import { UrlEmbed } from "../bookmarks/UrlEmbed";
 
 import {
   BookmarkTypes,
@@ -172,6 +174,14 @@ export default function LinkContentSection({
         />
       </div>
     );
+  } else if (section === "embed") {
+    content = (
+      <div className="flex h-full w-full items-center justify-center p-4">
+        <div className="w-full max-w-4xl">
+          <UrlEmbed url={bookmark.content.url} />
+        </div>
+      </div>
+    );
   } else if (section === "archive") {
     content = <FullPageArchiveSection link={bookmark.content} />;
   } else if (section === "video") {
@@ -239,6 +249,12 @@ export default function LinkContentSection({
                 <div className="flex items-center">
                   <FileText className="mr-2 h-4 w-4" />
                   {t("common.pdf")}
+                </div>
+              </SelectItem>
+              <SelectItem value="embed">
+                <div className="flex items-center">
+                  <Tv className="mr-2 h-4 w-4 text-primary" />
+                  Embedded View
                 </div>
               </SelectItem>
               <SelectItem

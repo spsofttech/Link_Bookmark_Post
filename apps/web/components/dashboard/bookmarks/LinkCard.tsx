@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, ImagePlus, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, ImagePlus, Pencil, Tv } from "lucide-react";
 import { useUserSettings } from "@/lib/userSettings";
 import { cn } from "@/lib/utils";
+import { UrlEmbed } from "./UrlEmbed";
 
 import type { ZBookmarkTypeLink } from "@karakeep/shared/types/bookmarks";
 import {
@@ -108,6 +109,7 @@ function LinkCardContent({
   onEditField?: (field: "title" | "url" | "description") => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showEmbed, setShowEmbed] = useState(false);
   const { onClickUrl, urlTarget } = useOnClickUrl(bookmark);
 
   const url = bookmark.content.url;
@@ -132,22 +134,54 @@ function LinkCardContent({
         >
           {url}
         </Link>
-        {onEditField && (
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onEditField("url");
+              setShowEmbed(!showEmbed);
             }}
-            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/url:opacity-100"
-            title="Edit URL"
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors",
+              showEmbed
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/70 text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+            title="Toggle Embedded View"
           >
-            <Pencil className="size-3" />
-            <span>Edit URL</span>
+            <Tv className="size-3" />
+            <span>{showEmbed ? "Hide Embed" : "Embed"}</span>
           </button>
-        )}
+          {onEditField && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEditField("url");
+              }}
+              className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/url:opacity-100"
+              title="Edit URL"
+            >
+              <Pencil className="size-3" />
+              <span>Edit URL</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {showEmbed && (
+        <div
+          role="region"
+          aria-label="Embedded URL View"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="my-1.5"
+        >
+          <UrlEmbed url={url} onClose={() => setShowEmbed(false)} />
+        </div>
+      )}
 
       {/* 2. Title below URL with inline edit button (MAX 1 LINE, no deadspace) */}
       {showTitle ? (

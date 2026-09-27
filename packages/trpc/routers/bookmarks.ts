@@ -1,5 +1,16 @@
 import { experimental_trpcMiddleware, TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, exists, gt, inArray, like, lt, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  like,
+  lt,
+  or,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -40,7 +51,11 @@ import logger from "@karakeep/shared/logger";
 import { buildSummaryPrompt } from "@karakeep/shared/prompts.server";
 import { EnqueueOptions } from "@karakeep/shared/queueing";
 import { getRateLimitClient } from "@karakeep/shared/ratelimiting";
-import { FilterQuery, SearchResponse, getSearchClient } from "@karakeep/shared/search";
+import {
+  FilterQuery,
+  SearchResponse,
+  getSearchClient,
+} from "@karakeep/shared/search";
 import { parseSearchQuery } from "@karakeep/shared/searchQueryParser";
 import type {
   ZBookmarkContent,
@@ -77,7 +92,10 @@ import {
   router,
 } from "../index";
 import { RuleEngine } from "../lib/ruleEngine";
-import { buildInArrayCondition, getBookmarkIdsFromMatcher } from "../lib/search";
+import {
+  buildInArrayCondition,
+  getBookmarkIdsFromMatcher,
+} from "../lib/search";
 import { reciprocalRankFusion } from "../lib/searchRanking";
 import { Asset } from "../models/assets";
 import { BareBookmark, Bookmark } from "../models/bookmarks";
@@ -139,6 +157,30 @@ async function attemptToDedupLink(ctx: AuthedContext, url: string) {
     .where(and(eq(bookmarkLinks.url, url), eq(bookmarks.userId, ctx.user.id)));
 
   if (result.length == 0) {
+    return null;
+  }
+  return (
+    await Bookmark.fromId(ctx, result[0].id, /* includeContent: */ false)
+  ).asZBookmark();
+}
+
+async function attemptToDedupText(ctx: AuthedContext, textContent: string) {
+  const trimmed = textContent.trim();
+  if (!trimmed) return null;
+  const result = await ctx.db
+    .select({
+      id: bookmarkTexts.id,
+    })
+    .from(bookmarkTexts)
+    .leftJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
+    .where(
+      and(
+        eq(bookmarkTexts.text, trimmed),
+        eq(bookmarks.userId, ctx.user.id),
+      ),
+    );
+
+  if (result.length === 0) {
     return null;
   }
   return (
@@ -588,6 +630,20 @@ export const bookmarksAppRouter = router({
             ...alreadyExists,
             ...resaved,
             modifiedAt: now,
+            alreadyExists: true,
+          };
+        }
+      }
+
+      if (input.type === BookmarkTypes.TEXT && input.text) {
+        const alreadyExists = await attemptToDedupText(ctx, input.text);
+        if (alreadyExists) {
+          addLogFields<"bookmark.create">({
+            "bookmark.id": alreadyExists.id,
+            "bookmark.already_existed": true,
+          });
+          return {
+            ...alreadyExists,
             alreadyExists: true,
           };
         }
@@ -1370,7 +1426,10 @@ export const bookmarksAppRouter = router({
         };
       };
 
-      const fullTextSearch = async (searchLimit: number, searchOffset?: number) => {
+      const fullTextSearch = async (
+        searchLimit: number,
+        searchOffset?: number,
+      ) => {
         const client = await getSearchClient();
         if (!client) {
           return dbFullTextSearch(searchLimit, searchOffset ?? 0);

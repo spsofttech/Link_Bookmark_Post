@@ -3,7 +3,7 @@ import { TFunction } from "i18next";
 
 import serverConfig from "@karakeep/shared/config";
 
-import SidebarItem from "./SidebarItem";
+import { SidebarNavList } from "./SidebarNavList";
 import SidebarVersion from "./SidebarVersion";
 import { TSidebarItem } from "./TSidebarItem";
 
@@ -20,16 +20,7 @@ export default async function Sidebar({
   return (
     <aside className="flex h-[calc(100vh-64px)] w-60 flex-col gap-5 border-r p-4 xl:w-72">
       <div>
-        <ul className="space-y-2 text-sm">
-          {items(t).map((item) => (
-            <SidebarItem
-              key={item.name}
-              logo={item.icon}
-              name={item.name}
-              path={item.path}
-            />
-          ))}
-        </ul>
+        <SidebarNavList items={items(t)} />
       </div>
       {extraSections}
       <SidebarVersion

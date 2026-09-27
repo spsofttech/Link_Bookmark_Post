@@ -13,6 +13,7 @@ export default function SidebarItem({
   linkClassName,
   style,
   collapseButton,
+  count,
   right = null,
   dropHighlight = false,
   onDrop,
@@ -26,6 +27,7 @@ export default function SidebarItem({
   style?: React.CSSProperties;
   className?: string;
   linkClassName?: string;
+  count?: number | string;
   right?: React.ReactNode;
   collapseButton?: React.ReactNode;
   dropHighlight?: boolean;
@@ -35,6 +37,14 @@ export default function SidebarItem({
   onDragLeave?: React.DragEventHandler;
 }) {
   const currentPath = usePathname();
+  const rightElement =
+    right ??
+    (count !== undefined ? (
+      <span className="flex items-center px-2.5 text-xs font-light text-muted-foreground">
+        {count}
+      </span>
+    ) : null);
+
   return (
     <li
       className={cn(
@@ -66,7 +76,7 @@ export default function SidebarItem({
           </span>
         </Link>
       </div>
-      {right}
+      {rightElement}
     </li>
   );
 }
