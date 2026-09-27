@@ -379,10 +379,12 @@ function GridView({
   footer,
   className,
   wrapTags,
-  _layout,
-  _fitHeight = false,
+  layout,
+  fitHeight = false,
   bookmarkIndex,
-}: Props & { layout: BookmarksLayoutTypes }) {
+}: Props & { layout: BookmarksLayoutTypes; fitHeight?: boolean }) {
+  void layout;
+  void fitHeight;
   const { showNotes, showTags, showTitle, imageFit } =
     useBookmarkDisplaySettings();
   const imgFitClass = switchCase(imageFit, {
