@@ -1,19 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { TRPCError } from "@trpc/server";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  getTableColumns,
-  gt,
-  lt,
-  lte,
-  or,
-  SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, lte, or, SQL } from "drizzle-orm";
 import TurndownService from "turndown";
 import { z } from "zod";
 
@@ -514,121 +502,90 @@ export class Bookmark extends BareBookmark {
         desc(bookmarks.id),
       ] as const;
 
-    // Choose query strategy based on filters
-    // Strategy: Use the most selective filter as the driving table
-    let sq;
+    const projection = {
+      bookmark: bookmarks,
+      bookmarkLinks: bookmarkLinks,
+      bookmarkTexts: bookmarkTexts,
+      bookmarkAssets: bookmarkAssets,
+    };
+
+    let results: {
+      bookmark: typeof bookmarks.$inferSelect;
+      bookmarkLinks: typeof bookmarkLinks.$inferSelect | null;
+      bookmarkTexts: typeof bookmarkTexts.$inferSelect | null;
+      bookmarkAssets: typeof bookmarkAssets.$inferSelect | null;
+    }[];
 
     if (input.listId !== undefined) {
-      // PATH: List filter - start from bookmarksInLists (more selective)
-      // Access control is already verified by List.fromId() called above
-      sq = ctx.db.$with("bookmarksSq").as(
-        ctx.db
-          .select(getTableColumns(bookmarks))
-          .from(bookmarksInLists)
-          .innerJoin(bookmarks, eq(bookmarks.id, bookmarksInLists.bookmarkId))
-          .where(
-            and(
-              eq(bookmarksInLists.listId, input.listId),
-              ...buildCommonFilters(),
-              buildCursorCondition(bookmarks.createdAt, bookmarks.id),
-            ),
-          )
-          .limit(input.limit + 1)
-          .orderBy(...buildOrderBy()),
-      );
+      results = await ctx.db
+        .select(projection)
+        .from(bookmarksInLists)
+        .innerJoin(bookmarks, eq(bookmarks.id, bookmarksInLists.bookmarkId))
+        .leftJoin(bookmarkLinks, eq(bookmarkLinks.id, bookmarks.id))
+        .leftJoin(bookmarkTexts, eq(bookmarkTexts.id, bookmarks.id))
+        .leftJoin(bookmarkAssets, eq(bookmarkAssets.id, bookmarks.id))
+        .where(
+          and(
+            eq(bookmarksInLists.listId, input.listId),
+            ...buildCommonFilters(),
+            buildCursorCondition(bookmarks.createdAt, bookmarks.id),
+          ),
+        )
+        .limit(input.limit + 1)
+        .orderBy(...buildOrderBy());
     } else if (input.tagId !== undefined) {
-      // PATH: Tag filter - start from tagsOnBookmarks (more selective)
-      sq = ctx.db.$with("bookmarksSq").as(
-        ctx.db
-          .select(getTableColumns(bookmarks))
-          .from(tagsOnBookmarks)
-          .innerJoin(bookmarks, eq(bookmarks.id, tagsOnBookmarks.bookmarkId))
-          .where(
-            and(
-              eq(tagsOnBookmarks.tagId, input.tagId),
-              eq(bookmarks.userId, ctx.user.id), // Access control
-              ...buildCommonFilters(),
-              buildCursorCondition(bookmarks.createdAt, bookmarks.id),
-            ),
-          )
-          .limit(input.limit + 1)
-          .orderBy(...buildOrderBy()),
-      );
+      results = await ctx.db
+        .select(projection)
+        .from(tagsOnBookmarks)
+        .innerJoin(bookmarks, eq(bookmarks.id, tagsOnBookmarks.bookmarkId))
+        .leftJoin(bookmarkLinks, eq(bookmarkLinks.id, bookmarks.id))
+        .leftJoin(bookmarkTexts, eq(bookmarkTexts.id, bookmarks.id))
+        .leftJoin(bookmarkAssets, eq(bookmarkAssets.id, bookmarks.id))
+        .where(
+          and(
+            eq(tagsOnBookmarks.tagId, input.tagId),
+            eq(bookmarks.userId, ctx.user.id),
+            ...buildCommonFilters(),
+            buildCursorCondition(bookmarks.createdAt, bookmarks.id),
+          ),
+        )
+        .limit(input.limit + 1)
+        .orderBy(...buildOrderBy());
     } else if (input.rssFeedId !== undefined) {
-      // PATH: RSS feed filter - start from rssFeedImportsTable (more selective)
-      sq = ctx.db.$with("bookmarksSq").as(
-        ctx.db
-          .select(getTableColumns(bookmarks))
-          .from(rssFeedImportsTable)
-          .innerJoin(
-            bookmarks,
-            eq(bookmarks.id, rssFeedImportsTable.bookmarkId),
-          )
-          .where(
-            and(
-              eq(rssFeedImportsTable.rssFeedId, input.rssFeedId),
-              eq(bookmarks.userId, ctx.user.id), // Access control
-              ...buildCommonFilters(),
-              buildCursorCondition(bookmarks.createdAt, bookmarks.id),
-            ),
-          )
-          .limit(input.limit + 1)
-          .orderBy(...buildOrderBy()),
-      );
+      results = await ctx.db
+        .select(projection)
+        .from(rssFeedImportsTable)
+        .innerJoin(bookmarks, eq(bookmarks.id, rssFeedImportsTable.bookmarkId))
+        .leftJoin(bookmarkLinks, eq(bookmarkLinks.id, bookmarks.id))
+        .leftJoin(bookmarkTexts, eq(bookmarkTexts.id, bookmarks.id))
+        .leftJoin(bookmarkAssets, eq(bookmarkAssets.id, bookmarks.id))
+        .where(
+          and(
+            eq(rssFeedImportsTable.rssFeedId, input.rssFeedId),
+            eq(bookmarks.userId, ctx.user.id),
+            ...buildCommonFilters(),
+            buildCursorCondition(bookmarks.createdAt, bookmarks.id),
+          ),
+        )
+        .limit(input.limit + 1)
+        .orderBy(...buildOrderBy());
     } else {
-      // PATH: No list/tag/rssFeed filter - query bookmarks directly
-      // Uses composite index: bookmarks_userId_lastSavedAt_id_idx (or archived/favourited variants)
-      sq = ctx.db.$with("bookmarksSq").as(
-        ctx.db
-          .select(getTableColumns(bookmarks))
-          .from(bookmarks)
-          .where(
-            and(
-              eq(bookmarks.userId, ctx.user.id),
-              ...buildCommonFilters(),
-              buildCursorCondition(bookmarks.createdAt, bookmarks.id),
-            ),
-          )
-          .limit(input.limit + 1)
-          .orderBy(...buildOrderBy()),
-      );
+      results = await ctx.db
+        .select(projection)
+        .from(bookmarks)
+        .leftJoin(bookmarkLinks, eq(bookmarkLinks.id, bookmarks.id))
+        .leftJoin(bookmarkTexts, eq(bookmarkTexts.id, bookmarks.id))
+        .leftJoin(bookmarkAssets, eq(bookmarkAssets.id, bookmarks.id))
+        .where(
+          and(
+            eq(bookmarks.userId, ctx.user.id),
+            ...buildCommonFilters(),
+            buildCursorCondition(bookmarks.createdAt, bookmarks.id),
+          ),
+        )
+        .limit(input.limit + 1)
+        .orderBy(...buildOrderBy());
     }
-
-    // Execute fast 1-to-1 driver query (avoids N*M Cartesian product and excludes heavy htmlContent blobs when includeContent is false)
-    const results = await ctx.db
-      .with(sq)
-      .select({
-        bookmarksSq: sq,
-        bookmarkLinks: input.includeContent
-          ? bookmarkLinks
-          : {
-              id: bookmarkLinks.id,
-              url: bookmarkLinks.url,
-              title: bookmarkLinks.title,
-              description: bookmarkLinks.description,
-              author: bookmarkLinks.author,
-              publisher: bookmarkLinks.publisher,
-              datePublished: bookmarkLinks.datePublished,
-              dateModified: bookmarkLinks.dateModified,
-              imageUrl: bookmarkLinks.imageUrl,
-              favicon: bookmarkLinks.favicon,
-              htmlContent: sql<string | null>`NULL`,
-              contentAssetId: bookmarkLinks.contentAssetId,
-              readerViewStatus: bookmarkLinks.readerViewStatus,
-              readerViewScore: bookmarkLinks.readerViewScore,
-              readerViewReasons: bookmarkLinks.readerViewReasons,
-              crawledAt: bookmarkLinks.crawledAt,
-              crawlStatus: bookmarkLinks.crawlStatus,
-              crawlStatusCode: bookmarkLinks.crawlStatusCode,
-            },
-        bookmarkTexts: bookmarkTexts,
-        bookmarkAssets: bookmarkAssets,
-      })
-      .from(sq)
-      .leftJoin(bookmarkLinks, eq(bookmarkLinks.id, sq.id))
-      .leftJoin(bookmarkTexts, eq(bookmarkTexts.id, sq.id))
-      .leftJoin(bookmarkAssets, eq(bookmarkAssets.id, sq.id))
-      .orderBy(...buildOrderBy());
 
     const baseBookmarksMap = new Map<
       string,
@@ -641,14 +598,15 @@ export class Bookmark extends BareBookmark {
     >();
 
     for (const row of results) {
-      const b = row.bookmarksSq as unknown as typeof bookmarks.$inferSelect;
+      const b = row.bookmark;
       const bId = b.id;
       if (!baseBookmarksMap.has(bId)) {
+        if (row.bookmarkLinks && !input.includeContent) {
+          row.bookmarkLinks.htmlContent = null;
+        }
         baseBookmarksMap.set(bId, {
           bookmark: b,
-          link: row.bookmarkLinks?.id
-            ? (row.bookmarkLinks as unknown as typeof bookmarkLinks.$inferSelect)
-            : null,
+          link: row.bookmarkLinks?.id ? row.bookmarkLinks : null,
           text: row.bookmarkTexts?.id ? row.bookmarkTexts : null,
           asset: row.bookmarkAssets?.id ? row.bookmarkAssets : null,
         });
