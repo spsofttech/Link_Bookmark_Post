@@ -1,5 +1,4 @@
-import "dotenv/config";
-
+import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -66,7 +65,18 @@ try {
 
 try {
   if (!serverConfig.degradedMode) {
-    migrate(db, { migrationsFolder: path.resolve(__dirname, "./drizzle") });
+    const candidates = [
+      path.resolve(__dirname, "./drizzle"),
+      path.resolve(process.cwd(), "packages/db/drizzle"),
+      path.resolve(process.cwd(), "drizzle"),
+      path.resolve(__dirname, "../../packages/db/drizzle"),
+    ];
+    for (const folder of candidates) {
+      if (fs.existsSync(path.join(folder, "meta/_journal.json"))) {
+        migrate(db, { migrationsFolder: folder });
+        break;
+      }
+    }
   }
 } catch {
   // Ignored if migrations already applied, read-only mode, or running concurrently
