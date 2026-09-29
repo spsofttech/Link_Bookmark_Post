@@ -25,6 +25,7 @@ function isFrameRestrictedHost(host: string, pathname: string): boolean {
   if (host.includes("facebook.com")) return true;
   if (host.includes("t.me") || host.includes("telegram.org")) return true;
   if (host.includes("notion.site") || host.includes("notion.so")) return true;
+  if (host.includes("twitter.com") || host.includes("x.com")) return true;
   if (host.includes("threads.com") && !pathname.includes("/share/"))
     return true;
   if (
@@ -48,6 +49,14 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
         type: "notion",
         embedUrl: urlStr,
         domain: host,
+      };
+    }
+
+    // X / Twitter
+    if (host.includes("twitter.com") || host.includes("x.com")) {
+      return {
+        type: "twitter",
+        embedUrl: urlStr,
       };
     }
 
@@ -131,14 +140,6 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
           };
         }
       }
-    }
-
-    // X / Twitter
-    if (host.includes("twitter.com") || host.includes("x.com")) {
-      return {
-        embedUrl: `https://twitframe.com/show?url=${encodeURIComponent(urlStr)}`,
-        type: "twitter",
-      };
     }
 
     // YouTube
@@ -476,6 +477,9 @@ export function UrlEmbed({
     }
   } else {
     switch (embedInfo.type) {
+      case "twitter":
+        embedContent = <TwitterEmbedCard url={url} />;
+        break;
       case "threads":
         embedContent = <ThreadsEmbedCard url={url} />;
         break;
@@ -558,7 +562,7 @@ export function UrlEmbed({
           )}
         </div>
       </div>
-      <div className="relative size-full min-h-0 flex-1 bg-black/90">
+      <div className="relative size-full min-h-0 flex-1 bg-slate-900">
         {embedContent}
       </div>
     </div>
