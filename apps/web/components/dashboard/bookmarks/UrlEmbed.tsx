@@ -54,6 +54,15 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
 
     // X / Twitter
     if (host.includes("twitter.com") || host.includes("x.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const statusIdx = parts.indexOf("status");
+      if (statusIdx !== -1 && parts[statusIdx + 1]) {
+        const tweetId = parts[statusIdx + 1];
+        return {
+          type: "twitter",
+          embedUrl: `https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=dark`,
+        };
+      }
       return {
         type: "twitter",
         embedUrl: urlStr,
@@ -282,16 +291,56 @@ function ThreadsEmbedCard({ url }: { url: string }) {
   );
 }
 
-function TwitterEmbedCard({ url }: { url: string }) {
+function TwitterEmbedCard({
+  url,
+  embedUrl,
+}: {
+  url: string;
+  embedUrl?: string;
+}) {
+  const [iframeFailed, setIframeFailed] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+
+  useEffect(() => {
+    if (embedUrl?.includes("platform.twitter.com")) {
+      const timer = setTimeout(() => {
+        if (!iframeLoaded) {
+          setIframeFailed(true);
+        }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [embedUrl, iframeLoaded]);
+
   let handle = "X / Twitter";
   try {
     const parts = new URL(url).pathname.split("/").filter(Boolean);
-    if (parts[0]) {
+    if (parts[0] && parts[0] !== "status") {
       handle = `@${parts[0]}`;
     }
   } catch {
     handle = "X / Twitter";
   }
+
+  const isTweet = embedUrl?.includes("platform.twitter.com");
+
+  if (isTweet && !iframeFailed) {
+    return (
+      <div className="relative size-full bg-slate-950">
+        {!iframeLoaded && (
+          <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900" />
+        )}
+        <iframe
+          src={embedUrl}
+          className="size-full border-0"
+          loading="lazy"
+          onLoad={() => setIframeLoaded(true)}
+          onError={() => setIframeFailed(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex size-full flex-col justify-between bg-black p-3.5 text-white">
       <div className="flex items-center justify-between">
@@ -306,8 +355,11 @@ function TwitterEmbedCard({ url }: { url: string }) {
         </span>
       </div>
       <div className="my-1.5">
+        <h4 className="truncate text-sm font-bold text-slate-100">
+          {handle === "X / Twitter" ? "X (Twitter)" : `${handle} on X`}
+        </h4>
         <p className="line-clamp-2 text-xs text-slate-300">
-          View post & comments on X (Twitter)
+          View post, replies & media on X (Twitter)
         </p>
       </div>
       <a
@@ -316,7 +368,7 @@ function TwitterEmbedCard({ url }: { url: string }) {
         rel="noreferrer"
         className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-500 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-400"
       >
-        <span>Open Post on X</span>
+        <span>Open Link on X</span>
         <ExternalLink className="size-3" />
       </a>
     </div>
@@ -465,7 +517,9 @@ export function UrlEmbed({
 
   if (loadError) {
     if (embedInfo.type === "twitter") {
-      embedContent = <TwitterEmbedCard url={url} />;
+      embedContent = (
+        <TwitterEmbedCard url={url} embedUrl={embedInfo.embedUrl} />
+      );
     } else {
       let domain = "web";
       try {
@@ -478,7 +532,9 @@ export function UrlEmbed({
   } else {
     switch (embedInfo.type) {
       case "twitter":
-        embedContent = <TwitterEmbedCard url={url} />;
+        embedContent = (
+          <TwitterEmbedCard url={url} embedUrl={embedInfo.embedUrl} />
+        );
         break;
       case "threads":
         embedContent = <ThreadsEmbedCard url={url} />;
