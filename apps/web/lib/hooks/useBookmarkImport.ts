@@ -102,8 +102,13 @@ export function useBookmarkImport() {
         })),
       });
 
-      // Invalidate all query caches immediately so dashboard, tags, and lists update
-      await queryClient.invalidateQueries();
+      // Perform a single, synchronized refetch of active bookmark & list queries
+      await Promise.all([
+        queryClient.refetchQueries(api.bookmarks.getBookmarks.queryFilter()),
+        queryClient.refetchQueries(api.lists.list.queryFilter()),
+        queryClient.refetchQueries(api.lists.stats.queryFilter()),
+        queryClient.refetchQueries(api.tags.list.queryFilter()),
+      ]);
 
       return {
         counts: {
@@ -128,13 +133,6 @@ export function useBookmarkImport() {
         description: `Successfully imported ${result.counts.successes} bookmarks${result.counts.alreadyExisted > 0 ? ` (${result.counts.alreadyExisted} already existed)` : ""}.`,
         variant: "default",
       });
-
-      // Reload page / update data immediately
-      setTimeout(() => {
-        if (typeof window !== "undefined") {
-          window.location.reload();
-        }
-      }, 600);
     },
     onError: (error, variables) => {
       const id = currentImportIds.current.get(variables.file);
