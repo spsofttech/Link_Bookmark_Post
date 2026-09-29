@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, Github, Globe, Instagram, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -446,7 +446,17 @@ export function UrlEmbed({
   className?: string;
 }) {
   const [loadError, setLoadError] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const embedInfo = getEmbedInfo(url);
+
+  useEffect(() => {
+    if (embedInfo?.type === "iframe" && !iframeLoaded && !loadError) {
+      const timer = setTimeout(() => {
+        setIframeLoaded(true);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [embedInfo?.type, iframeLoaded, loadError]);
 
   if (!embedInfo) return null;
 
@@ -491,15 +501,21 @@ export function UrlEmbed({
         break;
       default:
         embedContent = (
-          <iframe
-            src={embedInfo.embedUrl}
-            className="size-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-            loading="lazy"
-            onError={() => setLoadError(true)}
-          />
+          <div className="relative size-full">
+            {!iframeLoaded && (
+              <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900" />
+            )}
+            <iframe
+              src={embedInfo.embedUrl}
+              className="size-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+              loading="lazy"
+              onLoad={() => setIframeLoaded(true)}
+              onError={() => setLoadError(true)}
+            />
+          </div>
         );
         break;
     }

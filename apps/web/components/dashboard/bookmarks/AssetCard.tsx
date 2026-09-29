@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -19,17 +20,29 @@ function AssetImage({
   bookmark: ZBookmarkTypeAsset;
   className?: string;
 }) {
+  const [loaded, setLoaded] = useState(false);
   const bookmarkedAsset = bookmark.content;
   switch (bookmarkedAsset.assetType) {
     case "image": {
       return (
-        <Link href={`/dashboard/preview/${bookmark.id}`}>
+        <Link
+          href={`/dashboard/preview/${bookmark.id}`}
+          className="relative block size-full overflow-hidden bg-muted"
+        >
+          {!loaded && (
+            <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-muted/60 via-muted-foreground/20 to-muted/60" />
+          )}
           <Image
             alt="asset"
             src={getAssetUrl(bookmarkedAsset.assetId)}
             fill={true}
             unoptimized
-            className={className}
+            className={cn(
+              className,
+              "transition-opacity duration-300",
+              !loaded && "opacity-0",
+            )}
+            onLoad={() => setLoaded(true)}
           />
         </Link>
       );
@@ -49,13 +62,24 @@ function AssetImage({
         );
       }
       return (
-        <Link href={`/dashboard/preview/${bookmark.id}`}>
+        <Link
+          href={`/dashboard/preview/${bookmark.id}`}
+          className="relative block size-full overflow-hidden bg-muted"
+        >
+          {!loaded && (
+            <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-muted/60 via-muted-foreground/20 to-muted/60" />
+          )}
           <Image
             alt="asset"
             src={getAssetUrl(screenshotAssetId)}
             fill={true}
             unoptimized
-            className={className}
+            className={cn(
+              className,
+              "transition-opacity duration-300",
+              !loaded && "opacity-0",
+            )}
+            onLoad={() => setLoaded(true)}
           />
         </Link>
       );

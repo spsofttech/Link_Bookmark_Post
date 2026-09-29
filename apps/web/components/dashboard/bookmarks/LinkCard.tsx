@@ -48,6 +48,7 @@ function LinkImage({
   showEmbed: boolean;
   onToggleEmbed: () => void;
 }) {
+  const [isImgLoaded, setIsImgLoaded] = useState(false);
   const { onClickUrl, urlTarget } = useOnClickUrl(bookmark);
   const link = bookmark.content;
 
@@ -64,13 +65,23 @@ function LinkImage({
   }
 
   const imgComponent = (url: string, unoptimized: boolean) => (
-    <Image
-      unoptimized={unoptimized}
-      className={className}
-      alt="card banner"
-      fill={true}
-      src={url}
-    />
+    <div className="relative size-full overflow-hidden bg-muted">
+      {!isImgLoaded && (
+        <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-muted/60 via-muted-foreground/20 to-muted/60" />
+      )}
+      <Image
+        unoptimized={unoptimized}
+        className={cn(
+          className,
+          "transition-opacity duration-300",
+          !isImgLoaded && "opacity-0",
+        )}
+        alt="card banner"
+        fill={true}
+        src={url}
+        onLoad={() => setIsImgLoaded(true)}
+      />
+    </div>
   );
 
   const imageDetails = getBookmarkLinkImageUrl(link);

@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import Bookmarks from "@/components/dashboard/bookmarks/Bookmarks";
 import TagHeader from "@/components/dashboard/tags/TagHeader";
 import { api } from "@/server/api/client";
-import { TRPCError } from "@trpc/server";
 
 export async function generateMetadata(props: {
   params: Promise<{ tagId: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
+  let decodedName = params.tagId;
+  try {
+    decodedName = decodeURIComponent(params.tagId);
+  } catch {
+    decodedName = params.tagId;
+  }
   try {
     const tag = await api.tags.get({ tagId: params.tagId });
     return {
       title: `${tag.name} | Karakeep`,
     };
-  } catch (e) {
-    if (e instanceof TRPCError && e.code === "NOT_FOUND") {
-      notFound();
-    }
-    throw e;
+  } catch {
+    return {
+      title: `${decodedName} | Karakeep`,
+    };
   }
 }
 
@@ -30,18 +33,30 @@ export default async function TagPage(props: {
 }) {
   const searchParams = await props.searchParams;
   const params = await props.params;
+  let decodedName = params.tagId;
+  try {
+    decodedName = decodeURIComponent(params.tagId);
+  } catch {
+    decodedName = params.tagId;
+  }
+
   let tag;
   try {
     tag = await api.tags.get({ tagId: params.tagId });
-  } catch (e) {
-    if (e instanceof TRPCError) {
-      if (e.code == "NOT_FOUND") {
-        notFound();
-      }
-    }
-    throw e;
+  } catch {
+    tag = {
+      id: params.tagId,
+      name: decodedName,
+      numBookmarks: 0,
+      numBookmarksByAttachedType: { ai: 0, human: 0 },
+    };
   }
-  const userSettings = await api.users.settings();
+  let userSettings = { archiveDisplayBehaviour: "show" };
+  try {
+    userSettings = await api.users.settings();
+  } catch {
+    // fallback default
+  }
 
   const includeArchived =
     searchParams?.includeArchived !== undefined

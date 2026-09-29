@@ -9,6 +9,7 @@ import {
   inArray,
   like,
   notExists,
+  or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -33,10 +34,34 @@ export class Tag {
     public tag: typeof bookmarkTags.$inferSelect,
   ) {}
 
-  static async fromId(ctx: AuthedContext, id: string): Promise<Tag> {
-    const tag = await ctx.db.query.bookmarkTags.findFirst({
-      where: eq(bookmarkTags.id, id),
+  static async fromId(ctx: AuthedContext, idOrName: string): Promise<Tag> {
+    let decoded = idOrName;
+    try {
+      decoded = decodeURIComponent(idOrName);
+    } catch {
+      decoded = idOrName;
+    }
+
+    let tag = await ctx.db.query.bookmarkTags.findFirst({
+      where: and(
+        eq(bookmarkTags.userId, ctx.user.id),
+        or(
+          eq(bookmarkTags.id, idOrName),
+          eq(bookmarkTags.name, idOrName),
+          eq(bookmarkTags.name, decoded),
+        ),
+      ),
     });
+
+    if (!tag) {
+      tag = await ctx.db.query.bookmarkTags.findFirst({
+        where: or(
+          eq(bookmarkTags.id, idOrName),
+          eq(bookmarkTags.name, idOrName),
+          eq(bookmarkTags.name, decoded),
+        ),
+      });
+    }
 
     if (!tag) {
       throw new TRPCError({

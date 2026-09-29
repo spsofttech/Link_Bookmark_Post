@@ -14,6 +14,8 @@ import { Toaster } from "sonner";
 
 import { clientConfig } from "@karakeep/shared/config";
 
+import GlobalProcessLoader from "@/components/shared/GlobalProcessLoader";
+
 const inter = Inter({
   subsets: ["latin"],
   fallback: ["sans-serif"],
@@ -78,6 +80,7 @@ export default async function RootLayout({
             clientConfig={clientConfig}
             userLocalSettings={await getUserLocalSettings()}
           >
+            <GlobalProcessLoader />
             {children}
             <ReactQueryDevtools initialIsOpen={false} />
           </Providers>
