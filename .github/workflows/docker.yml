@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'karakeep-app/karakeep'
     strategy:
       fail-fast: false
       matrix:
