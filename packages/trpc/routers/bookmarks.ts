@@ -174,10 +174,7 @@ async function attemptToDedupText(ctx: AuthedContext, textContent: string) {
     .from(bookmarkTexts)
     .leftJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
     .where(
-      and(
-        eq(bookmarkTexts.text, trimmed),
-        eq(bookmarks.userId, ctx.user.id),
-      ),
+      and(eq(bookmarkTexts.text, trimmed), eq(bookmarks.userId, ctx.user.id)),
     );
 
   if (result.length === 0) {

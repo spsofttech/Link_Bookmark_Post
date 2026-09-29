@@ -235,12 +235,7 @@ async function getIds(
       return db
         .selectDistinct({ id: bookmarks.id })
         .from(bookmarks)
-        .where(
-          and(
-            eq(bookmarks.userId, userId),
-            listCondition,
-          ),
-        );
+        .where(and(eq(bookmarks.userId, userId), listCondition));
     }
     case "inlist": {
       const comp = matcher.inList ? exists : notExists;

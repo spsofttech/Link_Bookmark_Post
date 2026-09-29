@@ -32,8 +32,7 @@ export function SidebarNavList({ items }: { items: TSidebarItem[] }) {
           name={item.name}
           path={item.path}
           count={
-            item.count ??
-            (item.right ? undefined : getCountForPath(item.path))
+            item.count ?? (item.right ? undefined : getCountForPath(item.path))
           }
           right={item.right}
         />

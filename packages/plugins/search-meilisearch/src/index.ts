@@ -30,7 +30,9 @@ function filterToMeiliSearchFilter(filter: FilterQuery): string {
       const chunks: string[] = [];
       for (let i = 0; i < filter.values.length; i += CHUNK_SIZE) {
         const chunk = filter.values.slice(i, i + CHUNK_SIZE);
-        chunks.push(`${filter.field} IN [${chunk.map((v) => `"${v}"`).join(",")}]`);
+        chunks.push(
+          `${filter.field} IN [${chunk.map((v) => `"${v}"`).join(",")}]`,
+        );
       }
       return `(${chunks.join(" OR ")})`;
     }
