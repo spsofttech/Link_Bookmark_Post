@@ -140,16 +140,8 @@ export function resolveMigrationsFolder(): string | null {
   return null;
 }
 
-try {
-  if (!serverConfig.degradedMode) {
-    const folder = resolveMigrationsFolder();
-    if (folder) {
-      migrate(db, { migrationsFolder: folder });
-    }
-  }
-} catch {
-  // Ignored if migrations already applied, read-only mode, or running concurrently
-}
+// Schema initialization and column auto-migration are handled safely above via SCHEMA_SQL and autoMigrateMissingColumns.
+// Runtime execution of migrate() is disabled to prevent _journal.json bundle missing errors.
 
 export function getInMemoryDB(runMigrations: boolean) {
   const mem = new Database(":memory:");
