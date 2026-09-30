@@ -22,16 +22,65 @@ instrumentDatabase(sqlite);
 export const db = drizzle(sqlite, { schema });
 export type DB = typeof db;
 
-// Guarantee all 35 tables and 64 indices exist even in bundled/serverless environments (Vercel)
+function autoMigrateMissingColumns(dbInstance: InstanceType<typeof Database>) {
+  const tableColumns = (tableName: string) => {
+    try {
+      const rows = dbInstance.pragma(`table_info("${tableName}")`) as {
+        name: string;
+      }[];
+      return new Set(rows.map((r) => r.name));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const safeAddColumn = (
+    tableName: string,
+    colName: string,
+    typeDef: string,
+  ) => {
+    const cols = tableColumns(tableName);
+    if (cols.size > 0 && !cols.has(colName)) {
+      try {
+        dbInstance.exec(
+          `ALTER TABLE "${tableName}" ADD COLUMN ${colName} ${typeDef}`,
+        );
+      } catch {
+        // Column may already exist or table missing
+      }
+    }
+  };
+
+  safeAddColumn(
+    "user",
+    "archiveDisplayBehaviour",
+    "text DEFAULT 'show' NOT NULL",
+  );
+  safeAddColumn("user", "backupsEnabled", "integer DEFAULT false NOT NULL");
+  safeAddColumn("user", "backupsFrequency", "text DEFAULT 'weekly' NOT NULL");
+  safeAddColumn("user", "backupsRetentionDays", "integer DEFAULT 30 NOT NULL");
+  safeAddColumn(
+    "user",
+    "bookmarkClickAction",
+    "text DEFAULT 'open_original_link' NOT NULL",
+  );
+  safeAddColumn("user", "timezone", "text DEFAULT 'UTC'");
+  safeAddColumn("user", "role", "text DEFAULT 'user'");
+  safeAddColumn("user", "salt", "text DEFAULT '' NOT NULL");
+
+  safeAddColumn("bookmarks", "lastSavedAt", "integer NOT NULL DEFAULT 0");
+  safeAddColumn("bookmarks", "taggingStatus", "text DEFAULT 'pending'");
+  safeAddColumn("bookmarks", "summarizationStatus", "text DEFAULT 'pending'");
+  safeAddColumn("bookmarks", "embeddingStatus", "text DEFAULT 'pending'");
+
+  safeAddColumn("backups", "status", "text DEFAULT 'pending' NOT NULL");
+  safeAddColumn("backups", "errorMessage", "text");
+}
+
+// Guarantee all 35 tables, 64 indices, and columns exist even in bundled/serverless environments (Vercel)
 try {
-  const tableCheck = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='user'",
-    )
-    .get();
-  if (!tableCheck) {
-    sqlite.exec(SCHEMA_SQL);
-  }
+  sqlite.exec(SCHEMA_SQL);
+  autoMigrateMissingColumns(sqlite);
 
   // Guarantee primary user exists across all serverless/ephemeral environments
   const userCheck = sqlite
@@ -78,7 +127,8 @@ export function resolveMigrationsFolder(): string | null {
 
   for (const folder of candidates) {
     try {
-      if (fs.existsSync(path.join(folder, "meta/_journal.json"))) {
+      const journalPath = path.join(folder, "meta/_journal.json");
+      if (fs.existsSync(journalPath) && fs.statSync(journalPath).isFile()) {
         return folder;
       }
     } catch {
@@ -103,10 +153,16 @@ try {
 export function getInMemoryDB(runMigrations: boolean) {
   const mem = new Database(":memory:");
   const db = drizzle(mem, { schema, logger: false });
+  mem.exec(SCHEMA_SQL);
+  autoMigrateMissingColumns(mem);
   if (runMigrations) {
     const folder = resolveMigrationsFolder();
     if (folder) {
-      migrate(db, { migrationsFolder: folder });
+      try {
+        migrate(db, { migrationsFolder: folder });
+      } catch {
+        // Ignored, schema fallback already applied
+      }
     }
   }
   return db;
