@@ -63,3 +63,37 @@ export function useWhoAmI() {
   const api = useTRPC();
   return useQuery(api.users.whoami.queryOptions());
 }
+
+export function useSupabaseStatus() {
+  const api = useTRPC();
+  return useQuery(api.users.getSupabaseStatus.queryOptions());
+}
+
+export function useToggleSupabaseSync(
+  opts?: Parameters<
+    TRPCApi["users"]["toggleSupabaseSync"]["mutationOptions"]
+  >[0],
+) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  return useMutation(
+    api.users.toggleSupabaseSync.mutationOptions({
+      ...opts,
+      onSuccess: (res, req, meta, context) => {
+        queryClient.invalidateQueries({
+          queryKey: api.users.getSupabaseStatus.queryKey(),
+        });
+        return opts?.onSuccess?.(res, req, meta, context);
+      },
+    }),
+  );
+}
+
+export function useSyncToSupabaseNow(
+  opts?: Parameters<
+    TRPCApi["users"]["syncToSupabaseNow"]["mutationOptions"]
+  >[0],
+) {
+  const api = useTRPC();
+  return useMutation(api.users.syncToSupabaseNow.mutationOptions(opts));
+}

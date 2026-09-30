@@ -419,6 +419,7 @@ export function ImportExportRow() {
 }
 
 import { ClearAllDataCard } from "./ClearAllData";
+import SupabaseSettings from "./SupabaseSettings";
 
 export default function ImportExport() {
   const { t } = useTranslation();
@@ -427,6 +428,8 @@ export default function ImportExport() {
       <SettingsSection title={t("settings.import.import_export_bookmarks")}>
         <ImportExportRow />
       </SettingsSection>
+
+      <SupabaseSettings />
 
       <SettingsSection title="Clear Library Data">
         <ClearAllDataCard />

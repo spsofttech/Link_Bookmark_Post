@@ -1,3 +1,9 @@
+import {
+  isSupabaseSyncEnabled,
+  setSupabaseSyncEnabled,
+  sqlite,
+  syncAllToSupabase,
+} from "@karakeep/db";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -167,6 +173,19 @@ export const usersAppRouter = router({
     const user = await User.fromCtx(ctx);
     await user.clearAllData();
     return { success: true };
+  }),
+  getSupabaseStatus: usersProcedure.query(() => {
+    return { enabled: isSupabaseSyncEnabled() };
+  }),
+  toggleSupabaseSync: usersProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      const updated = setSupabaseSyncEnabled(input.enabled);
+      return { enabled: updated };
+    }),
+  syncToSupabaseNow: usersProcedure.mutation(async () => {
+    const res = await syncAllToSupabase(sqlite);
+    return res;
   }),
   whoami: usersProcedure
     .output(zWhoAmIResponseSchema)

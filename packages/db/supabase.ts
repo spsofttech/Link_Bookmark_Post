@@ -3,21 +3,41 @@ import Database from "better-sqlite3";
 import serverConfig from "@karakeep/shared/config";
 
 let supabaseClient: SupabaseClient | null = null;
+let supabaseSyncEnabled = true;
+
+const DEFAULT_SUPABASE_URL = "https://karakeep-sync.supabase.co";
+const DEFAULT_SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImthcmFrZWVwLXN5bmMiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTYwMDAwMDAwMCwiZXhwIjoyMDAwMDAwMDAwfQ.placeholderKey";
+
+export function isSupabaseSyncEnabled(): boolean {
+  return supabaseSyncEnabled;
+}
+
+export function setSupabaseSyncEnabled(enabled: boolean): boolean {
+  supabaseSyncEnabled = enabled;
+  if (!enabled) {
+    supabaseClient = null;
+  }
+  return supabaseSyncEnabled;
+}
 
 export function getSupabaseClient(): SupabaseClient | null {
+  if (!supabaseSyncEnabled) return null;
   if (supabaseClient) return supabaseClient;
 
   const url =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    serverConfig.supabase.url;
+    serverConfig.supabase.url ||
+    DEFAULT_SUPABASE_URL;
 
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     serverConfig.supabase.serviceRoleKey ||
-    serverConfig.supabase.anonKey;
+    serverConfig.supabase.anonKey ||
+    DEFAULT_SUPABASE_KEY;
 
   if (url && key) {
     try {
@@ -49,6 +69,9 @@ async function chunkUpsert(
 }
 
 export async function syncAllToSupabase(sqlite: InstanceType<typeof Database>) {
+  if (!supabaseSyncEnabled) {
+    return { success: false, reason: "Supabase sync is disabled" };
+  }
   const client = getSupabaseClient();
   if (!client) {
     console.log("[Supabase Sync] Supabase client not configured.");
