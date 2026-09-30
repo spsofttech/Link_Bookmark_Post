@@ -63,19 +63,37 @@ try {
   );
 }
 
+export function resolveMigrationsFolder(): string | null {
+  const current = process.cwd();
+  const candidates = [
+    path.resolve(__dirname, "./drizzle"),
+    path.resolve(__dirname, "../drizzle"),
+    path.resolve(__dirname, "../../drizzle"),
+    path.resolve(__dirname, "../../../drizzle"),
+    path.resolve(current, "packages/db/drizzle"),
+    path.resolve(current, "drizzle"),
+    path.resolve(current, "../packages/db/drizzle"),
+    path.resolve(current, "../../packages/db/drizzle"),
+  ];
+
+  for (const folder of candidates) {
+    try {
+      if (fs.existsSync(path.join(folder, "meta/_journal.json"))) {
+        return folder;
+      }
+    } catch {
+      // Ignore access errors
+    }
+  }
+
+  return null;
+}
+
 try {
   if (!serverConfig.degradedMode) {
-    const candidates = [
-      path.resolve(__dirname, "./drizzle"),
-      path.resolve(process.cwd(), "packages/db/drizzle"),
-      path.resolve(process.cwd(), "drizzle"),
-      path.resolve(__dirname, "../../packages/db/drizzle"),
-    ];
-    for (const folder of candidates) {
-      if (fs.existsSync(path.join(folder, "meta/_journal.json"))) {
-        migrate(db, { migrationsFolder: folder });
-        break;
-      }
+    const folder = resolveMigrationsFolder();
+    if (folder) {
+      migrate(db, { migrationsFolder: folder });
     }
   }
 } catch {
@@ -86,7 +104,10 @@ export function getInMemoryDB(runMigrations: boolean) {
   const mem = new Database(":memory:");
   const db = drizzle(mem, { schema, logger: false });
   if (runMigrations) {
-    migrate(db, { migrationsFolder: path.resolve(__dirname, "./drizzle") });
+    const folder = resolveMigrationsFolder();
+    if (folder) {
+      migrate(db, { migrationsFolder: folder });
+    }
   }
   return db;
 }
