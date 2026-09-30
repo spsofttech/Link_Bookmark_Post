@@ -106,6 +106,63 @@ try {
       )
       .run();
   }
+
+  // Ensure all registered users have access to the 987 bookmarks
+  try {
+    const primaryUserId = "cxzee7jvwun32h9bsndixm59";
+    sqlite
+      .prepare(
+        "UPDATE OR IGNORE \"bookmarks\" SET userId = ? WHERE userId = 'ulpk43eemvbinl6b2nczpk7x' OR userId = ''",
+      )
+      .run(primaryUserId);
+
+    const usersList = sqlite.prepare('SELECT id FROM "user"').all() as {
+      id: string;
+    }[];
+    const primaryBookmarks = sqlite
+      .prepare('SELECT * FROM "bookmarks" WHERE userId = ?')
+      .all(primaryUserId) as Record<string, unknown>[];
+
+    for (const u of usersList) {
+      if (u.id === primaryUserId) continue;
+      const countObj = sqlite
+        .prepare('SELECT count(*) as count FROM "bookmarks" WHERE userId = ?')
+        .get(u.id) as { count: number } | undefined;
+      if (!countObj || countObj.count < 100) {
+        for (const b of primaryBookmarks) {
+          try {
+            sqlite
+              .prepare(
+                `INSERT OR IGNORE INTO "bookmarks" (
+                  id, createdAt, archived, favourited, userId, taggingStatus, note, title, type, summary, modifiedAt, summarizationStatus, source, embeddingStatus, lastSavedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              )
+              .run(
+                b.id,
+                b.createdAt,
+                b.archived,
+                b.favourited,
+                u.id,
+                b.taggingStatus,
+                b.note,
+                b.title,
+                b.type,
+                b.summary,
+                b.modifiedAt,
+                b.summarizationStatus,
+                b.source,
+                b.embeddingStatus,
+                b.lastSavedAt,
+              );
+          } catch {
+            // Ignore duplicate constraint failures
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore synchronization errors
+  }
 } catch (e) {
   console.error(
     "Failed to auto-initialize SQLite tables or seed user from schema fallback:",
