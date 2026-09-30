@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/sonner";
 import { useClientConfig } from "@/lib/clientConfig";
 import { useTranslation } from "@/lib/i18n/client";
@@ -32,19 +33,28 @@ import { SettingsSection } from "./SettingsPage";
 
 const LanguageSelect = () => {
   const lang = useInterfaceLang();
+  const router = useRouter();
+  const [selectedLang, setSelectedLang] = useState(lang);
+
+  useEffect(() => {
+    setSelectedLang(lang);
+  }, [lang]);
+
   return (
     <Select
-      value={lang}
+      value={selectedLang}
       onValueChange={async (val) => {
+        setSelectedLang(val);
         await updateInterfaceLang(val);
+        router.refresh();
       }}
     >
       <SelectTrigger className="h-11">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {Object.entries(langNameMappings).map(([lang, name]) => (
-          <SelectItem key={lang} value={lang}>
+        {Object.entries(langNameMappings).map(([langKey, name]) => (
+          <SelectItem key={langKey} value={langKey}>
             {name}
           </SelectItem>
         ))}
@@ -160,6 +170,7 @@ export default function UserOptions() {
                 disabled={!!clientConfig.demoMode || timezones === null}
                 value={field.value}
                 onValueChange={(value) => {
+                  field.onChange(value);
                   mutate({
                     timezone: value,
                   });
@@ -185,7 +196,7 @@ export default function UserOptions() {
           )}
         />
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="bookmarkClickAction"
@@ -199,6 +210,7 @@ export default function UserOptions() {
                   disabled={!!clientConfig.demoMode}
                   value={field.value}
                   onValueChange={(value) => {
+                    field.onChange(value);
                     mutate({
                       bookmarkClickAction:
                         value as ZUserSettings["bookmarkClickAction"],
@@ -239,6 +251,7 @@ export default function UserOptions() {
                   disabled={!!clientConfig.demoMode}
                   value={field.value}
                   onValueChange={(value) => {
+                    field.onChange(value);
                     mutate({
                       archiveDisplayBehaviour:
                         value as ZUserSettings["archiveDisplayBehaviour"],

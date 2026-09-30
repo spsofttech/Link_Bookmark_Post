@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SidebarItem({
@@ -37,6 +38,14 @@ export default function SidebarItem({
   onDragLeave?: React.DragEventHandler;
 }) {
   const currentPath = usePathname();
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, [currentPath]);
+
+  const isCurrent = path === currentPath;
+
   const rightElement =
     right ??
     (count !== undefined ? (
@@ -49,9 +58,7 @@ export default function SidebarItem({
     <li
       className={cn(
         "relative flex justify-between rounded-lg text-sm transition-colors hover:bg-accent",
-        path == currentPath
-          ? "bg-accent/50 text-foreground"
-          : "text-muted-foreground",
+        isCurrent ? "bg-accent/50 text-foreground" : "text-muted-foreground",
         dropHighlight && "bg-accent ring-2 ring-primary",
         className,
       )}
@@ -65,12 +72,21 @@ export default function SidebarItem({
         {collapseButton}
         <Link
           href={path}
+          onClick={() => {
+            if (!isCurrent) {
+              setIsLoading(true);
+            }
+          }}
           className={cn(
             "flex flex-1 items-center gap-x-2 rounded-[inherit] px-3 py-2",
             linkClassName,
           )}
         >
-          {logo}
+          {isLoading ? (
+            <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+          ) : (
+            logo
+          )}
           <span title={name} className="line-clamp-1 break-all">
             {name}
           </span>

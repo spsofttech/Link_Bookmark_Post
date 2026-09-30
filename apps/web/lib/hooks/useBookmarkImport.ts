@@ -102,12 +102,13 @@ export function useBookmarkImport() {
         })),
       });
 
-      // Perform a single, synchronized refetch of active bookmark & list queries
+      // Perform a complete invalidation of all bookmark, list, tag, and stats queries
+      // so homepage, grids, and counters update instantly with imported data
       await Promise.all([
-        queryClient.refetchQueries(api.bookmarks.getBookmarks.queryFilter()),
-        queryClient.refetchQueries(api.lists.list.queryFilter()),
-        queryClient.refetchQueries(api.lists.stats.queryFilter()),
-        queryClient.refetchQueries(api.tags.list.queryFilter()),
+        queryClient.invalidateQueries(api.bookmarks.pathFilter()),
+        queryClient.invalidateQueries(api.lists.pathFilter()),
+        queryClient.invalidateQueries(api.tags.pathFilter()),
+        queryClient.invalidateQueries(api.users.stats.pathFilter()),
       ]);
 
       return {
