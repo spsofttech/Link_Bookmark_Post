@@ -1,3 +1,4 @@
+import { sqlite, syncAllToSupabase } from "@karakeep/db";
 import { experimental_trpcMiddleware, TRPCError } from "@trpc/server";
 import {
   and,
@@ -533,6 +534,13 @@ export const bookmarksAppRouter = router({
         );
       }
 
+      syncAllToSupabase(sqlite).catch((err) => {
+        console.warn(
+          "Supabase import sync background error:",
+          err?.message || err,
+        );
+      });
+
       return {
         importedCount,
         skippedCount,
@@ -880,6 +888,9 @@ export const bookmarksAppRouter = router({
           enqueueOpts,
         ),
       ]);
+      syncAllToSupabase(sqlite).catch((err) => {
+        console.warn("Supabase create background error:", err?.message || err);
+      });
       return bookmark;
     }),
 

@@ -4,9 +4,10 @@ import { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 
 import * as schema from "./schema";
 
-export { db } from "./drizzle";
+export { db, sqlite } from "./drizzle";
 export type { DB } from "./drizzle";
 export * as schema from "./schema";
+export * from "./supabase";
 export { SqliteError } from "better-sqlite3";
 
 // This is exported here to avoid leaking better-sqlite types outside of this package.

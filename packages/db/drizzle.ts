@@ -12,8 +12,9 @@ import { instrumentDatabase } from "./instrumentation";
 import * as schema from "./schema";
 import { openSqliteDatabase } from "./sqlite";
 import { SCHEMA_SQL } from "./schema_sql";
+import { syncAllToSupabase } from "./supabase";
 
-const sqlite = openSqliteDatabase(dbConfig.dbCredentials.url, {
+export const sqlite = openSqliteDatabase(dbConfig.dbCredentials.url, {
   readOnly: serverConfig.degradedMode,
   walMode: serverConfig.database.walMode,
 });
@@ -107,7 +108,7 @@ try {
       .run();
   }
 
-  // Ensure all bookmarks belong to valid user accounts
+  // Ensure all bookmarks belong to valid user accounts & auto-sync to Supabase
   try {
     const primaryUserId = "cxzee7jvwun32h9bsndixm59";
     sqlite
@@ -115,6 +116,11 @@ try {
         "UPDATE OR IGNORE \"bookmarks\" SET userId = ? WHERE userId = 'ulpk43eemvbinl6b2nczpk7x' OR userId = ''",
       )
       .run(primaryUserId);
+
+    // Sync all library entries to Supabase
+    syncAllToSupabase(sqlite).catch((err) => {
+      console.warn("Supabase background sync skipped:", err?.message || err);
+    });
   } catch {
     // Ignore synchronization errors
   }

@@ -4,7 +4,7 @@ import { and, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { z } from "zod";
 
-import { SqliteError } from "@karakeep/db";
+import { clearSupabaseData, SqliteError } from "@karakeep/db";
 import {
   assets,
   AssetTypes,
@@ -484,6 +484,9 @@ export class User {
     await this.ctx.db
       .delete(bookmarkLists)
       .where(eq(bookmarkLists.userId, userId));
+    await clearSupabaseData().catch((err) => {
+      console.warn("Supabase clear background error:", err?.message || err);
+    });
   }
 
   async changePassword(
