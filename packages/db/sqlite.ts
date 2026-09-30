@@ -22,15 +22,28 @@ export function openSqliteDatabase(
       }
     }
 
-    if (!fs.existsSync(resolvedPath) || fs.statSync(resolvedPath).size === 0) {
+    if (
+      !fs.existsSync(resolvedPath) ||
+      fs.statSync(resolvedPath).size <= 4096
+    ) {
       const candidates = [
+        path.resolve(process.cwd(), "public/db.db"),
+        path.resolve(process.cwd(), "apps/web/public/db.db"),
+        path.resolve(process.cwd(), "apps/web/db.db"),
         path.resolve(process.cwd(), "packages/db/db.db"),
         path.resolve(process.cwd(), "data/db.db"),
         path.resolve(__dirname, "./db.db"),
+        path.resolve(__dirname, "../../public/db.db"),
+        path.resolve(__dirname, "../../apps/web/public/db.db"),
+        path.resolve(__dirname, "../../data/db.db"),
         path.resolve(__dirname, "../../packages/db/db.db"),
       ];
       for (const candidate of candidates) {
-        if (fs.existsSync(candidate) && candidate !== resolvedPath) {
+        if (
+          fs.existsSync(candidate) &&
+          candidate !== resolvedPath &&
+          fs.statSync(candidate).size > 4096
+        ) {
           try {
             fs.copyFileSync(candidate, resolvedPath);
             break;

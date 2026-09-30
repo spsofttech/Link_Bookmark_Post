@@ -44,6 +44,9 @@ yarn-error.log*
 # The sqlite database
 **/*.db
 !packages/db/db.db
+!apps/web/public/db.db
+!apps/web/db.db
+!data/db.db
 data/*
 !data/.gitkeep
 
