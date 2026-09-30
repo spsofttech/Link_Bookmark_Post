@@ -218,6 +218,11 @@ const allEnv = z.object({
   // Stripe configuration
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_DATABASE_URL: z.string().optional(),
+  DATABASE_URL: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_ID: z.string().optional(),
   STRIPE_YEARLY_PRICE_ID: z.string().optional(),
@@ -529,6 +534,17 @@ const serverConfigSchema = allEnv.transform((val, ctx) => {
       priceId: val.STRIPE_PRICE_ID,
       yearlyPriceId: val.STRIPE_YEARLY_PRICE_ID,
       isConfigured: !!val.STRIPE_SECRET_KEY && !!val.STRIPE_PUBLISHABLE_KEY,
+    },
+    supabase: {
+      url: val.SUPABASE_URL,
+      anonKey: val.SUPABASE_ANON_KEY,
+      serviceRoleKey: val.SUPABASE_SERVICE_ROLE_KEY,
+      databaseUrl: val.SUPABASE_DATABASE_URL || val.DATABASE_URL,
+      isConfigured: !!(
+        val.SUPABASE_URL ||
+        val.SUPABASE_DATABASE_URL ||
+        val.DATABASE_URL
+      ),
     },
     quotas: {
       free: {
