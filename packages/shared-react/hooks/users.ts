@@ -43,6 +43,22 @@ export function useDeleteAccount(
   return useMutation(api.users.deleteAccount.mutationOptions(opts));
 }
 
+export function useClearAllData(
+  opts?: Parameters<TRPCApi["users"]["clearAllData"]["mutationOptions"]>[0],
+) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  return useMutation(
+    api.users.clearAllData.mutationOptions({
+      ...opts,
+      onSuccess: (res, req, meta, context) => {
+        queryClient.invalidateQueries();
+        return opts?.onSuccess?.(res, req, meta, context);
+      },
+    }),
+  );
+}
+
 export function useWhoAmI() {
   const api = useTRPC();
   return useQuery(api.users.whoami.queryOptions());

@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { TRPCError } from "@trpc/server";
-import { and, count, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { z } from "zod";
 
@@ -458,6 +458,32 @@ export class User {
     }
 
     await User.deleteInternal(this.ctx.db, this.user.id);
+  }
+
+  async clearAllData(): Promise<void> {
+    const userId = this.user.id;
+    const userBookmarks = await this.ctx.db
+      .select({ id: bookmarks.id })
+      .from(bookmarks)
+      .where(eq(bookmarks.userId, userId));
+    const bookmarkIds = userBookmarks.map((b) => b.id);
+
+    if (bookmarkIds.length > 0) {
+      await this.ctx.db
+        .delete(tagsOnBookmarks)
+        .where(inArray(tagsOnBookmarks.bookmarkId, bookmarkIds));
+      await this.ctx.db
+        .delete(bookmarkLinks)
+        .where(inArray(bookmarkLinks.id, bookmarkIds));
+      await this.ctx.db.delete(bookmarks).where(eq(bookmarks.userId, userId));
+    }
+
+    await this.ctx.db
+      .delete(bookmarkTags)
+      .where(eq(bookmarkTags.userId, userId));
+    await this.ctx.db
+      .delete(bookmarkLists)
+      .where(eq(bookmarkLists.userId, userId));
   }
 
   async changePassword(

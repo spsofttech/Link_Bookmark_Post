@@ -35,7 +35,20 @@ const createDeleteAccountSchema = (isLocalUser: boolean) =>
       : z.string().optional(),
   });
 
+import { ClearAllDataCard } from "./ClearAllData";
+
 export function DeleteAccount() {
+  return (
+    <>
+      <SettingsSection title="Clear Data">
+        <ClearAllDataCard />
+      </SettingsSection>
+      <DeleteAccountSection />
+    </>
+  );
+}
+
+function DeleteAccountSection() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

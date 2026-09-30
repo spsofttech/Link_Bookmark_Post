@@ -418,12 +418,18 @@ export function ImportExportRow() {
   );
 }
 
+import { ClearAllDataCard } from "./ClearAllData";
+
 export default function ImportExport() {
   const { t } = useTranslation();
   return (
     <SettingsPage title={t("settings.import.import_export")}>
       <SettingsSection title={t("settings.import.import_export_bookmarks")}>
         <ImportExportRow />
+      </SettingsSection>
+
+      <SettingsSection title="Clear Library Data">
+        <ClearAllDataCard />
       </SettingsSection>
 
       <ImportSessionsSection />

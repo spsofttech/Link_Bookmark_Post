@@ -163,6 +163,11 @@ export const usersAppRouter = router({
       const user = await User.fromCtx(ctx);
       await user.deleteAccount(input.password);
     }),
+  clearAllData: usersProcedure.mutation(async ({ ctx }) => {
+    const user = await User.fromCtx(ctx);
+    await user.clearAllData();
+    return { success: true };
+  }),
   whoami: usersProcedure
     .output(zWhoAmIResponseSchema)
     .query(async ({ ctx }) => {
