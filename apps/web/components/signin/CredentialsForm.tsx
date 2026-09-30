@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import KarakeepLogo from "@/components/KarakeepIcon";
+import { Loader2 } from "lucide-react";
 import { ActionButton } from "@/components/ui/action-button";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
@@ -34,6 +36,7 @@ const VERIFY_EMAIL_ERROR = "Please verify your email address before signing in";
 export default function CredentialsForm() {
   const [signinError, setSigninError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientConfig = useClientConfig();
@@ -72,6 +75,19 @@ export default function CredentialsForm() {
 
   return (
     <div className="space-y-6">
+      {/* Full-screen redirect loader — shown after successful login */}
+      {isRedirecting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background/95 backdrop-blur-sm">
+          <KarakeepLogo height={64} />
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="text-lg font-semibold text-foreground">Signing you in...</span>
+          </div>
+          <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
+            <div className="h-full animate-[progress_1.5s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+          </div>
+        </div>
+      )}
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(async (value) => {
@@ -92,8 +108,11 @@ export default function CredentialsForm() {
               }
               return;
             }
+            // Show branded loading overlay while Next.js fetches the dashboard
+            setIsRedirecting(true);
             router.replace("/");
           })}
+
           className="space-y-4"
         >
           {signinError && (
