@@ -1,3 +1,4 @@
+// Database initialization and auto-healing engine (v1.0.4)
 import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
