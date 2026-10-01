@@ -542,7 +542,6 @@ export default function BookmarksDirectoryView({
   );
 
   const hasMoreClientPages = visibleBookmarks.length < filteredBookmarks.length;
-  const hasMoreData = hasMoreClientPages || hasNextPage;
 
   // Intersection observer for auto-loading more items
   const handleSentinelIntersect = useCallback(
@@ -633,8 +632,12 @@ export default function BookmarksDirectoryView({
                   </span>
                 )}
                 {showSidebar && (
-                  <span className="text-[10px] font-normal text-muted-foreground">
+                  <span className="flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+                    {isFetchingNextPage && (
+                      <Loader2 className="size-2.5 animate-spin" />
+                    )}
                     {categoryStats.all}
+                    {hasNextPage ? "+" : ""}
                   </span>
                 )}
               </button>
@@ -982,11 +985,23 @@ export default function BookmarksDirectoryView({
           {/* Sub Header: Component Count */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-muted-foreground">
-              {displayItems.length} of {filteredBookmarks.length} components
+              {isFetchingNextPage ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="size-3 animate-spin" />
+                  Loading all data from Supabase… ({bookmarks.length} loaded so
+                  far)
+                </span>
+              ) : (
+                <span>
+                  {filteredBookmarks.length} of {bookmarks.length} total
+                  components
+                  {activeCategory !== "all" || searchQuery ? " (filtered)" : ""}
+                </span>
+              )}
             </span>
-            {hasMoreData && (
-              <span className="text-[10px] text-muted-foreground/60">
-                Scroll for more
+            {hasNextPage && !isFetchingNextPage && (
+              <span className="text-[10px] text-amber-500">
+                Fetching more from database…
               </span>
             )}
           </div>

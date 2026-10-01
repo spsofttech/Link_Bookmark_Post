@@ -53,6 +53,15 @@ export default function UpdatableBookmarksGrid({
     refetch();
   }, [sortOrder, refetch]);
 
+  // Auto-fetch all remaining pages eagerly so all data is loaded without
+  // requiring the user to scroll. This ensures all 493+ records become
+  // available to the directory view's client-side filter/search/sort.
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, data]);
+
   const grid = (
     <BookmarksGrid
       bookmarks={data.pages.flatMap((b) => b.bookmarks)}
