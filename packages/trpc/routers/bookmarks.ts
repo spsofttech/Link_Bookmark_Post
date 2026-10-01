@@ -775,7 +775,7 @@ export const bookmarksAppRouter = router({
       createRateLimitMiddleware({
         name: "bookmarks.createBookmark",
         windowMs: 60 * 1000,
-        maxRequests: 30,
+        maxRequests: 500,
       }),
     )
     .use(createEventLogMiddleware("bookmark.create"))
@@ -1050,74 +1050,86 @@ export const bookmarksAppRouter = router({
         groupId: ctx.user.id,
       };
 
-      switch (bookmark.content.type) {
-        case BookmarkTypes.LINK: {
-          // The crawling job triggers openai when it's done
-          // Use a separate queue for low priority crawling to avoid impacting main queue parallelism
-          const crawlerQueue = shouldUseLowPriority
-            ? LowPriorityCrawlerQueue
-            : LinkCrawlerQueue;
-          await crawlerQueue.enqueue(
-            {
-              bookmarkId: bookmark.id,
-            },
-            enqueueOpts,
-          );
-          break;
-        }
-        case BookmarkTypes.TEXT: {
-          if (serverConfig.embedding.enableAutoIndexing) {
-            await EmbeddingsQueue.enqueue(
+      try {
+        switch (bookmark.content.type) {
+          case BookmarkTypes.LINK: {
+            // The crawling job triggers openai when it's done
+            // Use a separate queue for low priority crawling to avoid impacting main queue parallelism
+            const crawlerQueue = shouldUseLowPriority
+              ? LowPriorityCrawlerQueue
+              : LinkCrawlerQueue;
+            await crawlerQueue.enqueue(
               {
                 bookmarkId: bookmark.id,
-                type: "embed",
-                runTaggingOnComplete: true,
               },
               enqueueOpts,
             );
-          } else {
-            await OpenAIQueue.enqueue(
-              {
-                bookmarkId: bookmark.id,
-                type: "tag",
-              },
-              enqueueOpts,
-            );
+            break;
           }
-          break;
+          case BookmarkTypes.TEXT: {
+            if (serverConfig.embedding.enableAutoIndexing) {
+              await EmbeddingsQueue.enqueue(
+                {
+                  bookmarkId: bookmark.id,
+                  type: "embed",
+                  runTaggingOnComplete: true,
+                },
+                enqueueOpts,
+              );
+            } else {
+              await OpenAIQueue.enqueue(
+                {
+                  bookmarkId: bookmark.id,
+                  type: "tag",
+                },
+                enqueueOpts,
+              );
+            }
+            break;
+          }
+          case BookmarkTypes.ASSET: {
+            await AssetPreprocessingQueue.enqueue(
+              {
+                bookmarkId: bookmark.id,
+                fixMode: false,
+              },
+              enqueueOpts,
+            );
+            break;
+          }
         }
-        case BookmarkTypes.ASSET: {
-          await AssetPreprocessingQueue.enqueue(
-            {
-              bookmarkId: bookmark.id,
-              fixMode: false,
-            },
-            enqueueOpts,
-          );
-          break;
-        }
+      } catch (err) {
+        logger.warn(
+          `Failed to enqueue background processing for bookmark ${bookmark.id}: ${err}`,
+        );
       }
 
-      await Promise.all([
-        RuleEngine.triggerOnEvent(
-          bookmark.userId,
-          bookmark.id,
-          [
-            {
-              type: "bookmarkAdded",
-            },
-          ],
-          enqueueOpts,
-          ctx.db,
-        ),
-        triggerSearchReindex(bookmark.id, enqueueOpts),
-        new WebhooksService(ctx.db).triggerWebhook(
-          bookmark.id,
-          "created",
-          bookmark.userId,
-          enqueueOpts,
-        ),
-      ]);
+      try {
+        await Promise.all([
+          RuleEngine.triggerOnEvent(
+            bookmark.userId,
+            bookmark.id,
+            [
+              {
+                type: "bookmarkAdded",
+              },
+            ],
+            enqueueOpts,
+            ctx.db,
+          ),
+          triggerSearchReindex(bookmark.id, enqueueOpts),
+          new WebhooksService(ctx.db).triggerWebhook(
+            bookmark.id,
+            "created",
+            bookmark.userId,
+            enqueueOpts,
+          ),
+        ]);
+      } catch (err) {
+        logger.warn(
+          `Failed post-creation hooks for bookmark ${bookmark.id}: ${err}`,
+        );
+      }
       syncAllToSupabase().catch((err) => {
         console.warn("Supabase create background error:", err?.message || err);
       });

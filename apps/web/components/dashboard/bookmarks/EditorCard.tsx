@@ -111,25 +111,53 @@ export default function EditorCard({ className }: { className?: string }) {
 
   const uploadAsset = useUploadAsset();
 
-  function tryToImportUrls(text: string): void {
-    const lines = text.split("\n");
-    const urls: URL[] = [];
-    for (const line of lines) {
-      // parsing can also throw an exception, but will be caught outside
-      const url = new URL(line);
-      if (url.protocol != "http:" && url.protocol != "https:") {
-        throw new Error("Invalid URL");
+  function tryToImportUrls(rawText: string): void {
+    const rawLines = rawText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (rawLines.length === 0) return;
+
+    // Normalize lines: auto-add https:// if user pasted domain without protocol
+    const normalizedLines = rawLines.map((line) => {
+      if (
+        !/^https?:\/\//i.test(line) &&
+        /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/.*)?$/i.test(line)
+      ) {
+        return `https://${line}`;
       }
-      urls.push(url);
+      return line;
+    });
+
+    const urls: URL[] = [];
+    for (const line of normalizedLines) {
+      try {
+        const url = new URL(line);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+          urls.push(url);
+        }
+      } catch {
+        // Line is not a URL
+      }
+    }
+
+    if (urls.length === 1 && rawLines.length === 1) {
+      mutate({ type: BookmarkTypes.LINK, url: urls[0].toString() });
+      return;
+    }
+
+    if (urls.length > 1) {
+      setMultiUrlImportState({ urls, text: rawText });
+      return;
     }
 
     if (urls.length === 1) {
-      // Only 1 url in the textfield --> simply import it
-      mutate({ type: BookmarkTypes.LINK, url: text });
+      mutate({ type: BookmarkTypes.LINK, url: urls[0].toString() });
       return;
     }
-    // multiple urls found --> ask the user if it should be imported as multiple URLs or as a text bookmark
-    setMultiUrlImportState({ urls, text });
+
+    // Save as text bookmark if no valid URLs found
+    mutate({ type: BookmarkTypes.TEXT, text: rawText });
   }
 
   const onInput = (e: React.FormEvent<HTMLTextAreaElement>) => {

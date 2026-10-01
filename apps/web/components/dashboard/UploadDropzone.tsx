@@ -26,8 +26,11 @@ export function useUploadAsset() {
         toast({ description: "Bookmark uploaded" });
       }
     },
-    onError: () => {
-      toast({ description: "Something went wrong", variant: "destructive" });
+    onError: (err) => {
+      toast({
+        description: err?.message || "Failed to upload asset",
+        variant: "destructive",
+      });
     },
   });
 
