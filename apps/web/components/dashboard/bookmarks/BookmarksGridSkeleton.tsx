@@ -1,3 +1,5 @@
+"use client";
+
 // TODO: Refactor the bookmark layout grid to be generic and allow to pass the bookmark component generically.
 // This removes the need for handling the layout in this component.
 import { useMemo } from "react";
@@ -8,8 +10,19 @@ import {
   useGridColumns,
 } from "@/lib/userLocalSettings/bookmarksLayout";
 import tailwindConfig from "@/tailwind.config";
-import Masonry from "react-masonry-css";
+import ReactMasonry from "react-masonry-css";
 import resolveConfig from "tailwindcss/resolveConfig";
+
+// oxlint-disable-next-line @typescript-eslint/no-explicit-any
+const MasonryComponent = (ReactMasonry as any)?.default || ReactMasonry;
+const SafeMasonry =
+  typeof MasonryComponent === "function" ||
+  (typeof MasonryComponent === "object" && MasonryComponent !== null)
+    ? MasonryComponent
+    : // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+      ({ children, className }: any) => (
+        <div className={className}>{children}</div>
+      );
 
 function getBreakpointConfig(userColumns: number) {
   const fullConfig = resolveConfig(tailwindConfig);
@@ -69,22 +82,22 @@ export default function BookmarksGridSkeleton({
 
   return bookmarkLayoutSwitch(layout, {
     masonry: (
-      <Masonry
+      <SafeMasonry
         className="-ml-4 flex w-auto"
         columnClassName="pl-4"
         breakpointCols={breakpointConfig}
       >
         {children}
-      </Masonry>
+      </SafeMasonry>
     ),
     grid: (
-      <Masonry
+      <SafeMasonry
         className="-ml-4 flex w-auto"
         columnClassName="pl-4"
         breakpointCols={breakpointConfig}
       >
         {children}
-      </Masonry>
+      </SafeMasonry>
     ),
     list: <div className="grid grid-cols-1">{children}</div>,
     compact: <div className="grid grid-cols-1">{children}</div>,

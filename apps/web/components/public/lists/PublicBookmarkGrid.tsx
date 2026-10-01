@@ -14,8 +14,19 @@ import tailwindConfig from "@/tailwind.config";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Expand, FileIcon, ImageIcon } from "lucide-react";
 import { useInView } from "react-intersection-observer";
-import Masonry from "react-masonry-css";
+import ReactMasonry from "react-masonry-css";
 import resolveConfig from "tailwindcss/resolveConfig";
+
+// oxlint-disable-next-line @typescript-eslint/no-explicit-any
+const MasonryComponent = (ReactMasonry as any)?.default || ReactMasonry;
+const SafeMasonry =
+  typeof MasonryComponent === "function" ||
+  (typeof MasonryComponent === "object" && MasonryComponent !== null)
+    ? MasonryComponent
+    : // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+      ({ children, className }: any) => (
+        <div className={className}>{children}</div>
+      );
 
 import { useTRPC } from "@karakeep/shared-react/trpc";
 import {
@@ -231,7 +242,7 @@ export default function PublicBookmarkGrid({
   }, [data]);
   return (
     <>
-      <Masonry
+      <SafeMasonry
         className="-ml-4 flex w-auto"
         columnClassName="pl-4"
         breakpointCols={breakpointConfig}
@@ -239,7 +250,7 @@ export default function PublicBookmarkGrid({
         {bookmarks.map((bookmark) => (
           <BookmarkCard key={bookmark.id} bookmark={bookmark} />
         ))}
-      </Masonry>
+      </SafeMasonry>
       {hasNextPage && (
         <div className="flex justify-center">
           <ActionButton

@@ -58,7 +58,7 @@ const nextConfig = {
     ];
   },
 
-  // transpilePackages: ["@karakeep/shared", "@karakeep/db", "@karakeep/trpc"],
+  transpilePackages: ["react-masonry-css"],
 
   /** We already do linting and typechecking as separate tasks in CI */
   typescript: { ignoreBuildErrors: true },
