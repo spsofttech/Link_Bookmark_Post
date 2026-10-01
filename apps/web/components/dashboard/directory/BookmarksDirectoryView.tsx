@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Layers,
   Bot,
@@ -34,6 +34,7 @@ import {
   Eye,
   X,
   Play,
+  Loader2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,9 @@ import {
 } from "@karakeep/shared/utils/bookmarkUtils";
 import EditorCard from "../bookmarks/EditorCard";
 import BookmarkOptions from "../bookmarks/BookmarkOptions";
+
+// ─── Page size for client-side display chunking ──────────────────────────────
+const PAGE_SIZE = 24;
 
 interface CategoryDef {
   id: string;
@@ -137,6 +141,39 @@ function getPlatformInfo(url: string | null | undefined) {
     };
   }
 
+  if (lower.includes("tiktok.com")) {
+    return {
+      name: "TikTok",
+      color: "bg-pink-600/10 text-pink-600 border-pink-600/20",
+      type: "tiktok",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  if (lower.includes("vimeo.com")) {
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/i);
+    return {
+      name: "Vimeo",
+      color: "bg-sky-600/10 text-sky-600 border-sky-600/20",
+      type: "vimeo",
+      videoId: vimeoMatch ? vimeoMatch[1] : null,
+      embedUrl: vimeoMatch
+        ? `https://player.vimeo.com/video/${vimeoMatch[1]}`
+        : url,
+    };
+  }
+
+  if (lower.includes("linkedin.com")) {
+    return {
+      name: "LinkedIn",
+      color: "bg-blue-600/10 text-blue-600 border-blue-600/20",
+      type: "linkedin",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
   try {
     const host = new URL(url).hostname.replace(/^www\./, "");
     return {
@@ -157,12 +194,55 @@ function getPlatformInfo(url: string | null | undefined) {
   }
 }
 
+// ─── Single card transform (memoized per bookmark) ───────────────────────────
+function transformBookmark(b: ZBookmark, index: number) {
+  const title = getBookmarkTitle(b) || "Untitled Post";
+  const summary =
+    b.summary ||
+    b.note ||
+    (b.content.type === BookmarkTypes.LINK ? b.content.description : "") ||
+    "Bookmark post.";
+  const categoryTag = b.tags?.[0]?.name || "general";
+  const statsCount = Math.floor(Math.abs(Math.sin(index + 1) * 35000)) + 5000;
+  const rawUrl = getSourceUrl(b);
+  const url = rawUrl || "";
+  const platform = getPlatformInfo(url);
+
+  let previewImage: string | null = null;
+  if (b.content.type === BookmarkTypes.LINK && b.content.imageUrl) {
+    previewImage = b.content.imageUrl;
+  } else if (b.content.type === BookmarkTypes.ASSET && b.content.assetId) {
+    previewImage = `/api/assets/${b.content.assetId}`;
+  } else if (platform.type === "youtube" && platform.videoId) {
+    previewImage = `https://img.youtube.com/vi/${platform.videoId}/hqdefault.jpg`;
+  }
+
+  return {
+    id: b.id,
+    bookmark: b as ZBookmark | null,
+    title,
+    summary,
+    categoryTag,
+    statsCount,
+    url,
+    previewImage,
+    platform,
+    domain: url ? platform.name : "web",
+  };
+}
+
 export default function BookmarksDirectoryView({
   bookmarks,
   _showEditorCard = true,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  fetchNextPage = () => ({}),
 }: {
   bookmarks: ZBookmark[];
   _showEditorCard?: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -173,12 +253,19 @@ export default function BookmarksDirectoryView({
   >("popular");
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
 
+  // Client-side pagination (display chunks)
+  const [displayPage, setDisplayPage] = useState<number>(1);
+
   // Active Embed Preview Modal State
   const [activeEmbedItem, setActiveEmbedItem] = useState<{
     title: string;
     url: string;
     platform: ReturnType<typeof getPlatformInfo>;
   } | null>(null);
+
+  // Scroll sentinel ref for infinite scroll within the main area
+  const scrollSentinelRef = useRef<HTMLDivElement | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Real category counts calculation from actual user bookmarks
   const categoryStats = useMemo(() => {
@@ -202,11 +289,11 @@ export default function BookmarksDirectoryView({
       plugins: 0,
     };
 
-    bookmarks.forEach((b) => {
-      const tagNames = b.tags?.map((t) => t.name.toLowerCase()) || [];
-      const title = (getBookmarkTitle(b) || "").toLowerCase();
-      const summary = (b.summary || b.note || "").toLowerCase();
-      const url = (getSourceUrl(b) || "").toLowerCase();
+    for (const b of bookmarks) {
+      const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+      const title = (getBookmarkTitle(b) ?? "").toLowerCase();
+      const summary = (b.summary ?? b.note ?? "").toLowerCase();
+      const url = (getSourceUrl(b) ?? "").toLowerCase();
       const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
       if (tagNames.includes("skills") || fullText.includes("skill"))
@@ -256,117 +343,123 @@ export default function BookmarksDirectoryView({
         /(producthunt|saas|tool)/i.test(fullText)
       )
         stats["product-tool"]++;
-    });
+    }
 
     return stats;
   }, [bookmarks]);
 
-  const categories: CategoryDef[] = [
-    {
-      id: "skills",
-      name: "Skills",
-      count: categoryStats.skills,
-      icon: <Layers className="size-4 text-amber-500" />,
-      iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
-      description:
-        "Pre-built templates and configurations to supercharge your AI workflow",
-      tags: ["creative-design", "development", "web-development", "data-ai"],
-    },
-    {
-      id: "agents",
-      name: "Agents",
-      count: categoryStats.agents,
-      icon: <Bot className="size-4 text-blue-500" />,
-      iconBg: "bg-blue-500/10 border-blue-500/20 text-blue-500",
-      description: "Specialized AI agents for every development task",
-      tags: [
-        "development-team",
-        "development-tools",
-        "ai-specialists",
-        "database",
-      ],
-    },
-    {
-      id: "commands",
-      name: "Commands",
-      count: categoryStats.commands,
-      icon: <Terminal className="size-4 text-emerald-500" />,
-      iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-500",
-      description: "CLI shortcuts and executable automation commands",
-      tags: ["cli", "automation", "scripts"],
-    },
-    {
-      id: "share-image",
-      name: "Share Image",
-      count: categoryStats["share-image"],
-      icon: <ImageIcon className="size-4 text-purple-500" />,
-      iconBg: "bg-purple-500/10 border-purple-500/20 text-purple-500",
-      description:
-        "Curated collection of images, visual infographics, and design templates",
-      tags: ["graphics", "ui-ux", "visuals"],
-    },
-    {
-      id: "code-tech",
-      name: "Code & Tech",
-      count: categoryStats["code-tech"],
-      icon: <Code className="size-4 text-cyan-500" />,
-      iconBg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-500",
-      description:
-        "Developer repositories, gists, code snippets, and frameworks",
-      tags: ["programming", "react", "typescript"],
-    },
-    {
-      id: "video",
-      name: "Video",
-      count: categoryStats.video,
-      icon: <Video className="size-4 text-red-500" />,
-      iconBg: "bg-red-500/10 border-red-500/20 text-red-500",
-      description: "Video tutorials, tech talks, and visual demonstrations",
-      tags: ["media", "tutorials"],
-    },
-    {
-      id: "article-blog",
-      name: "Article & Blog",
-      count: categoryStats["article-blog"],
-      icon: <FileText className="size-4 text-amber-600" />,
-      iconBg: "bg-amber-600/10 border-amber-600/20 text-amber-600",
-      description: "Deep-dive articles, longform blog posts, and documentation",
-      tags: ["reading", "blogs"],
-    },
-    {
-      id: "social-thread",
-      name: "Social & Thread",
-      count: categoryStats["social-thread"],
-      icon: <MessageSquare className="size-4 text-sky-500" />,
-      iconBg: "bg-sky-500/10 border-sky-500/20 text-sky-500",
-      description: "Curated social discussions, threads, and community posts",
-      tags: ["discussions", "twitter"],
-    },
-  ];
+  const categories: CategoryDef[] = useMemo(
+    () => [
+      {
+        id: "skills",
+        name: "Skills",
+        count: categoryStats.skills,
+        icon: <Layers className="size-4 text-amber-500" />,
+        iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+        description:
+          "Pre-built templates and configurations to supercharge your AI workflow",
+        tags: ["creative-design", "development", "web-development", "data-ai"],
+      },
+      {
+        id: "agents",
+        name: "Agents",
+        count: categoryStats.agents,
+        icon: <Bot className="size-4 text-blue-500" />,
+        iconBg: "bg-blue-500/10 border-blue-500/20 text-blue-500",
+        description: "Specialized AI agents for every development task",
+        tags: [
+          "development-team",
+          "development-tools",
+          "ai-specialists",
+          "database",
+        ],
+      },
+      {
+        id: "commands",
+        name: "Commands",
+        count: categoryStats.commands,
+        icon: <Terminal className="size-4 text-emerald-500" />,
+        iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-500",
+        description: "CLI shortcuts and executable automation commands",
+        tags: ["cli", "automation", "scripts"],
+      },
+      {
+        id: "share-image",
+        name: "Share Image",
+        count: categoryStats["share-image"],
+        icon: <ImageIcon className="size-4 text-purple-500" />,
+        iconBg: "bg-purple-500/10 border-purple-500/20 text-purple-500",
+        description:
+          "Curated collection of images, visual infographics, and design templates",
+        tags: ["graphics", "ui-ux", "visuals"],
+      },
+      {
+        id: "code-tech",
+        name: "Code & Tech",
+        count: categoryStats["code-tech"],
+        icon: <Code className="size-4 text-cyan-500" />,
+        iconBg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-500",
+        description:
+          "Developer repositories, gists, code snippets, and frameworks",
+        tags: ["programming", "react", "typescript"],
+      },
+      {
+        id: "video",
+        name: "Video",
+        count: categoryStats.video,
+        icon: <Video className="size-4 text-red-500" />,
+        iconBg: "bg-red-500/10 border-red-500/20 text-red-500",
+        description: "Video tutorials, tech talks, and visual demonstrations",
+        tags: ["media", "tutorials"],
+      },
+      {
+        id: "article-blog",
+        name: "Article & Blog",
+        count: categoryStats["article-blog"],
+        icon: <FileText className="size-4 text-amber-600" />,
+        iconBg: "bg-amber-600/10 border-amber-600/20 text-amber-600",
+        description:
+          "Deep-dive articles, longform blog posts, and documentation",
+        tags: ["reading", "blogs"],
+      },
+      {
+        id: "social-thread",
+        name: "Social & Thread",
+        count: categoryStats["social-thread"],
+        icon: <MessageSquare className="size-4 text-sky-500" />,
+        iconBg: "bg-sky-500/10 border-sky-500/20 text-sky-500",
+        description: "Curated social discussions, threads, and community posts",
+        tags: ["discussions", "twitter"],
+      },
+    ],
+    [categoryStats],
+  );
 
-  const currentCategoryObj = categories.find(
-    (c) => c.id === activeCategory,
-  ) || {
-    id: "all",
-    name: "All Components",
-    count: categoryStats.all,
-    icon: <Boxes className="size-4 text-amber-500" />,
-    iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
-    description:
-      "All posts and bookmarks organized by category across your workspace",
-    tags: ["all"],
-  };
+  const currentCategoryObj = useMemo(
+    () =>
+      categories.find((c) => c.id === activeCategory) ?? {
+        id: "all",
+        name: "All Components",
+        count: categoryStats.all,
+        icon: <Boxes className="size-4 text-amber-500" />,
+        iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+        description:
+          "All posts and bookmarks organized by category across your workspace",
+        tags: ["all"],
+      },
+    [activeCategory, categories, categoryStats.all],
+  );
 
-  // Filter & Sort Bookmarks
+  // Filter & Sort (no per-item transform here yet - defer to display stage)
   const filteredBookmarks = useMemo(() => {
-    let result = [...bookmarks];
+    let result = bookmarks;
 
     if (activeCategory !== "all") {
       result = result.filter((b) => {
-        const tagNames = b.tags?.map((t) => t.name.toLowerCase()) || [];
-        const title = (getBookmarkTitle(b) || "").toLowerCase();
-        const summary = (b.summary || b.note || "").toLowerCase();
-        const url = (getSourceUrl(b) || "").toLowerCase();
+        const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+        const title = (getBookmarkTitle(b) ?? "").toLowerCase();
+        const summary = (b.summary ?? b.note ?? "").toLowerCase();
+        const url = (getSourceUrl(b) ?? "").toLowerCase();
         const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
         if (activeCategory === "skills")
@@ -408,24 +501,24 @@ export default function BookmarksDirectoryView({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter((b) => {
-        const title = (getBookmarkTitle(b) || "").toLowerCase();
-        const summary = (b.summary || b.note || "").toLowerCase();
-        const url = (getSourceUrl(b) || "").toLowerCase();
+        const title = (getBookmarkTitle(b) ?? "").toLowerCase();
+        const summary = (b.summary ?? b.note ?? "").toLowerCase();
+        const url = (getSourceUrl(b) ?? "").toLowerCase();
         return title.includes(q) || summary.includes(q) || url.includes(q);
       });
     }
 
     if (sortBy === "alphabetical") {
-      result.sort((a, b) =>
-        (getBookmarkTitle(a) || "").localeCompare(getBookmarkTitle(b) || ""),
+      result = [...result].sort((a, b) =>
+        (getBookmarkTitle(a) ?? "").localeCompare(getBookmarkTitle(b) ?? ""),
       );
     } else if (sortBy === "newest") {
-      result.sort(
+      result = [...result].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     } else if (sortBy === "oldest") {
-      result.sort(
+      result = [...result].sort(
         (a, b) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
@@ -434,54 +527,56 @@ export default function BookmarksDirectoryView({
     return result;
   }, [bookmarks, activeCategory, searchQuery, sortBy]);
 
-  // Display items derived strictly from actual user bookmarks with robust preview image resolution
-  const displayItems = useMemo(() => {
-    return filteredBookmarks.map((b, i) => {
-      const title = getBookmarkTitle(b) || "Untitled Post";
-      const summary =
-        b.summary ||
-        b.note ||
-        (b.content.type === BookmarkTypes.LINK ? b.content.description : "") ||
-        "Bookmark post.";
-      const categoryTag =
-        b.tags?.[0]?.name ||
-        currentCategoryObj.tags[i % currentCategoryObj.tags.length] ||
-        "development";
-      const statsCount = Math.floor(Math.abs(Math.sin(i + 1) * 35000)) + 5000;
-      const rawUrl = getSourceUrl(b);
-      const url = rawUrl || "";
-      const platform = getPlatformInfo(url);
+  // Reset display page when filter/sort changes
+  useEffect(() => {
+    setDisplayPage(1);
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [activeCategory, searchQuery, sortBy]);
 
-      // Resolve live high-quality preview image for any platform
-      let previewImage: string | null = null;
-      if (b.content.type === BookmarkTypes.LINK && b.content.imageUrl) {
-        previewImage = b.content.imageUrl;
-      } else if (b.content.type === BookmarkTypes.ASSET && b.content.assetId) {
-        previewImage = `/api/assets/${b.content.assetId}`;
-      } else if (platform.type === "youtube" && platform.videoId) {
-        previewImage = `https://img.youtube.com/vi/${platform.videoId}/hqdefault.jpg`;
-      } else if (url) {
-        previewImage = `https://api.microlink.io/?url=${encodeURIComponent(url)}&embed=image.url`;
+  // Items visible so far (client-side chunked render for performance)
+  const visibleBookmarks = useMemo(
+    () => filteredBookmarks.slice(0, displayPage * PAGE_SIZE),
+    [filteredBookmarks, displayPage],
+  );
+
+  const hasMoreClientPages = visibleBookmarks.length < filteredBookmarks.length;
+  const hasMoreData = hasMoreClientPages || hasNextPage;
+
+  // Intersection observer for auto-loading more items
+  const handleSentinelIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      if (!entries[0]?.isIntersecting) return;
+      if (hasMoreClientPages) {
+        setDisplayPage((p) => p + 1);
+      } else if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
       }
+    },
+    [hasMoreClientPages, hasNextPage, isFetchingNextPage, fetchNextPage],
+  );
 
-      return {
-        id: b.id,
-        bookmark: b as ZBookmark | null,
-        title,
-        summary,
-        categoryTag,
-        statsCount,
-        url,
-        previewImage,
-        platform,
-        domain: url ? platform.name : "web",
-      };
+  useEffect(() => {
+    const sentinel = scrollSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(handleSentinelIntersect, {
+      root: mainScrollRef.current,
+      threshold: 0.1,
     });
-  }, [filteredBookmarks, currentCategoryObj]);
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleSentinelIntersect]);
+
+  // Memoised transform for visible items only
+  const displayItems = useMemo(
+    () => visibleBookmarks.map((b, i) => transformBookmark(b, i)),
+    [visibleBookmarks],
+  );
 
   return (
     <div className="fixed inset-0 z-40 flex h-screen w-screen overflow-hidden bg-background font-sans text-foreground">
-      {/* 1. Primary Left Page Sidebar - AI Templates & Real Categories */}
+      {/* 1. Primary Left Page Sidebar */}
       <aside
         className={cn(
           "flex shrink-0 flex-col border-r border-border bg-card/60 transition-all duration-200",
@@ -589,7 +684,7 @@ export default function BookmarksDirectoryView({
                 );
               })}
 
-              {/* Dynamic menu items */}
+              {/* Extra menu items */}
               {[
                 {
                   name: "Settings",
@@ -674,7 +769,7 @@ export default function BookmarksDirectoryView({
                   {showSidebar && (
                     <span className="flex-1 text-left">{res.name}</span>
                   )}
-                  {showSidebar && res.badge && (
+                  {showSidebar && "badge" in res && res.badge && (
                     <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400">
                       {res.badge}
                     </span>
@@ -708,7 +803,7 @@ export default function BookmarksDirectoryView({
       {/* 2. Primary Page Content Area & Header */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Header Bar */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-card/40 px-6 backdrop-blur-md">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/40 px-6 backdrop-blur-md">
           {/* Global Search */}
           <div className="relative flex w-full max-w-md items-center">
             <span className="absolute left-3 font-mono text-xs text-muted-foreground">
@@ -752,8 +847,11 @@ export default function BookmarksDirectoryView({
           </div>
         </header>
 
-        {/* Main Body View */}
-        <main className="flex-1 space-y-6 overflow-y-auto p-8">
+        {/* Main Scrollable Body */}
+        <main
+          ref={mainScrollRef}
+          className="flex-1 space-y-6 overflow-y-auto p-8"
+        >
           {/* ALWAYS VISIBLE Add Post & Import File Section */}
           <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -864,7 +962,7 @@ export default function BookmarksDirectoryView({
                 value={sortBy}
                 onChange={(e) =>
                   setSortBy(
-                    e.target.value as unknown as
+                    e.target.value as
                       | "popular"
                       | "newest"
                       | "oldest"
@@ -884,12 +982,44 @@ export default function BookmarksDirectoryView({
           {/* Sub Header: Component Count */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-muted-foreground">
-              {displayItems.length} components
+              {displayItems.length} of {filteredBookmarks.length} components
             </span>
+            {hasMoreData && (
+              <span className="text-[10px] text-muted-foreground/60">
+                Scroll for more
+              </span>
+            )}
           </div>
 
-          {/* 3-Column Component Cards Grid OR Clean Empty Workspace Banner */}
-          {displayItems.length > 0 ? (
+          {/* Cards Grid OR Clean Empty Workspace Banner */}
+          {bookmarks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+                <Boxes className="size-7" />
+              </div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                Workspace is empty (0 records)
+              </h3>
+              <p className="max-w-md text-xs text-muted-foreground">
+                All data has been cleared. Add your first post from X,
+                Instagram, YouTube, TikTok, or import CSV, Excel (.xlsx), or
+                JSON files using the section above to populate your workspace
+                from 0!
+              </p>
+            </div>
+          ) : displayItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <Search className="size-7" />
+              </div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                No results found
+              </h3>
+              <p className="max-w-md text-xs text-muted-foreground">
+                Try a different search term or category filter.
+              </p>
+            </div>
+          ) : (
             <div
               className={cn(
                 viewMode === "grid"
@@ -914,19 +1044,16 @@ export default function BookmarksDirectoryView({
                         alt={item.title}
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                         onError={(e) => {
-                          // Hide broken img tag gracefully and show fallback
                           const target = e.currentTarget;
                           target.style.display = "none";
-                          if (target.nextElementSibling) {
-                            (
-                              target.nextElementSibling as HTMLElement
-                            ).style.display = "flex";
-                          }
+                          const fallback =
+                            target.nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = "flex";
                         }}
                       />
                     ) : null}
 
-                    {/* Fallback Graphic Box when image is absent or errors out */}
+                    {/* Fallback Graphic Box */}
                     <div
                       style={{
                         display: item.previewImage ? "none" : "flex",
@@ -1053,20 +1180,16 @@ export default function BookmarksDirectoryView({
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
-                <Boxes className="size-7" />
-              </div>
-              <h3 className="text-base font-bold tracking-tight text-foreground">
-                Workspace is empty (0 records)
-              </h3>
-              <p className="max-w-md text-xs text-muted-foreground">
-                All data has been cleared. Add your first post from X,
-                Instagram, YouTube, TikTok, or import CSV, Excel (.xlsx), or
-                JSON files using the section above to populate your workspace
-                from 0!
-              </p>
+          )}
+
+          {/* Infinite Scroll Sentinel */}
+          <div ref={scrollSentinelRef} className="h-4 w-full" />
+
+          {/* Loading Indicator */}
+          {(isFetchingNextPage || hasMoreClientPages) && (
+            <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Loading more...</span>
             </div>
           )}
         </main>
@@ -1122,6 +1245,15 @@ export default function BookmarksDirectoryView({
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
+              ) : activeEmbedItem.platform.type === "vimeo" &&
+                activeEmbedItem.platform.embedUrl ? (
+                <iframe
+                  src={activeEmbedItem.platform.embedUrl}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen
+                />
               ) : activeEmbedItem.platform.type === "twitter" &&
                 activeEmbedItem.platform.embedUrl ? (
                 <iframe
@@ -1136,13 +1268,31 @@ export default function BookmarksDirectoryView({
                   title={activeEmbedItem.title}
                   className="h-full w-full border-0 bg-white"
                 />
-              ) : (
+              ) : activeEmbedItem.platform.type === "reddit" ||
+                activeEmbedItem.platform.type === "github" ? (
                 <iframe
                   src={activeEmbedItem.url}
                   title={activeEmbedItem.title}
                   className="h-full w-full border-0 bg-white"
-                  sandbox="allow-scripts allow-same-origin allow-popups"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
                 />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
+                  <div className="text-center">
+                    <p className="mb-2 text-sm text-muted-foreground">
+                      Direct embedding is not supported for this platform.
+                    </p>
+                    <a
+                      href={activeEmbedItem.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600"
+                    >
+                      <ExternalLink className="size-4" />
+                      Open in New Tab
+                    </a>
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -1,25 +1,11 @@
 import { redirect } from "next/navigation";
-import AllLists from "@/components/dashboard/sidebar/AllLists";
-import MobileSidebar from "@/components/shared/sidebar/MobileSidebar";
-import Sidebar from "@/components/shared/sidebar/Sidebar";
 import SidebarLayout from "@/components/shared/sidebar/SidebarLayout";
-import { Separator } from "@/components/ui/separator";
 import { ReaderSettingsProvider } from "@/lib/readerSettings";
 import { UserSettingsContextProvider } from "@/lib/userSettings";
 import { api } from "@/server/api/client";
 import { getServerAuthSession } from "@/server/auth";
 import { TRPCError } from "@trpc/server";
-import { TFunction } from "i18next";
-import {
-  Archive,
-  ClipboardList,
-  Highlighter,
-  Home,
-  Search,
-  Tag,
-} from "lucide-react";
 
-import { PluginManager, PluginType } from "@karakeep/shared/plugins";
 import { tryCatch } from "@karakeep/shared/tryCatch";
 
 export default async function Dashboard({
@@ -34,10 +20,7 @@ export default async function Dashboard({
     redirect("/");
   }
 
-  const [lists, userSettings] = await Promise.all([
-    tryCatch(api.lists.list()),
-    tryCatch(api.users.settings()),
-  ]);
+  const userSettings = await tryCatch(api.users.settings());
 
   if (userSettings.error) {
     if (userSettings.error instanceof TRPCError) {
@@ -52,10 +35,6 @@ export default async function Dashboard({
       "Failed to load user settings in dashboard layout:",
       userSettings.error,
     );
-  }
-
-  if (lists.error) {
-    console.error("Failed to load lists in dashboard layout:", lists.error);
   }
 
   const fallbackSettings = {
@@ -76,70 +55,11 @@ export default async function Dashboard({
   };
 
   const initialUserSettings = userSettings.data || fallbackSettings;
-  const initialLists = lists.data || { lists: [] };
-
-  const items = (t: TFunction) =>
-    [
-      {
-        name: t("common.home"),
-        icon: <Home size={18} />,
-        path: "/dashboard/bookmarks",
-      },
-      PluginManager.isRegistered(PluginType.Search)
-        ? [
-            {
-              name: t("common.search"),
-              icon: <Search size={18} />,
-              path: "/dashboard/search",
-            },
-          ]
-        : [],
-      {
-        name: t("common.tags"),
-        icon: <Tag size={18} />,
-        path: "/dashboard/tags",
-      },
-      {
-        name: t("common.highlights"),
-        icon: <Highlighter size={18} />,
-        path: "/dashboard/highlights",
-      },
-      {
-        name: t("common.archive"),
-        icon: <Archive size={18} />,
-        path: "/dashboard/archive",
-      },
-    ].flat();
-
-  const mobileSidebar = (t: TFunction) => [
-    ...items(t),
-    {
-      name: t("lists.all_lists"),
-      icon: <ClipboardList size={18} />,
-      path: "/dashboard/lists",
-    },
-  ];
 
   return (
     <UserSettingsContextProvider userSettings={initialUserSettings}>
       <ReaderSettingsProvider>
-        <SidebarLayout
-          sidebar={
-            <Sidebar
-              items={items}
-              extraSections={
-                <>
-                  <Separator />
-                  <AllLists initialData={initialLists} />
-                </>
-              }
-            />
-          }
-          mobileSidebar={<MobileSidebar items={mobileSidebar} />}
-          modal={modal}
-        >
-          {children}
-        </SidebarLayout>
+        <SidebarLayout modal={modal}>{children}</SidebarLayout>
       </ReaderSettingsProvider>
     </UserSettingsContextProvider>
   );

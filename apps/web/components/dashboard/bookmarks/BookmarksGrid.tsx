@@ -2,7 +2,6 @@
 
 import { memo, useEffect, useState } from "react";
 import KeyboardShortcutsDialog from "@/components/dashboard/KeyboardShortcutsDialog";
-import NoBookmarksBanner from "@/components/dashboard/bookmarks/NoBookmarksBanner";
 import { ActionButton } from "@/components/ui/action-button";
 import ActionConfirmingDialog from "@/components/ui/action-confirming-dialog";
 import useBulkActionsStore from "@/lib/bulkActions";
@@ -18,7 +17,6 @@ import { cn } from "@/lib/utils";
 import tailwindConfig from "@/tailwind.config";
 import { Slot } from "@radix-ui/react-slot";
 import { ErrorBoundary } from "react-error-boundary";
-import { useInView } from "react-intersection-observer";
 import resolveConfig from "tailwindcss/resolveConfig";
 
 import type { ZBookmark } from "@karakeep/shared/types/bookmarks";
@@ -168,7 +166,6 @@ export default function BookmarksGrid({
     (state) => state.setInBookmarkGrid,
   );
   const withinListContext = useBookmarkListContext();
-  const { ref: loadMoreRef, inView: loadMoreButtonInView } = useInView();
 
   // For list/compact layouts, navigation is single-column
   const isListLayout = layout === "list" || layout === "compact";
@@ -208,43 +205,15 @@ export default function BookmarksGrid({
     };
   }, [setInBookmarkGrid]);
 
-  useEffect(() => {
-    if (loadMoreButtonInView && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, loadMoreButtonInView]);
-
-  if (bookmarks.length == 0 && !showEditorCard) {
-    return (
-      <>
-        <NoBookmarksBanner />
-        <KeyboardShortcutsDialog
-          open={helpDialogOpen}
-          setOpen={setHelpDialogOpen}
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <BookmarksDirectoryView
         bookmarks={bookmarks}
         _showEditorCard={showEditorCard}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        fetchNextPage={fetchNextPage}
       />
-      {hasNextPage && (
-        <div className="my-4 flex justify-center">
-          <ActionButton
-            ref={loadMoreRef}
-            ignoreDemoMode={true}
-            loading={isFetchingNextPage}
-            onClick={() => fetchNextPage()}
-            variant="ghost"
-          >
-            Load More
-          </ActionButton>
-        </div>
-      )}
 
       <KeyboardShortcutsDialog
         open={helpDialogOpen}
