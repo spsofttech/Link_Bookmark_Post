@@ -91,12 +91,16 @@ function getPlatformInfo(url: string | null | undefined) {
   }
 
   if (lower.includes("twitter.com") || lower.includes("x.com")) {
+    // Extract tweet ID for official oEmbed widget
+    const tweetMatch = url.match(
+      /(?:twitter|x)\.com\/(?:#!\/)?\w+\/status(?:es)?\/([\d]+)/i,
+    );
     return {
       name: "X / Twitter",
       color: "bg-sky-500/10 text-sky-500 border-sky-500/20",
       type: "twitter",
-      videoId: null,
-      embedUrl: `https://twitframe.com/show?url=${encodeURIComponent(url)}`,
+      videoId: tweetMatch ? tweetMatch[1] : null,
+      embedUrl: tweetMatch ? url : null, // pass original URL for widget
     };
   }
 
@@ -119,7 +123,7 @@ function getPlatformInfo(url: string | null | undefined) {
       color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
       type: "github",
       videoId: null,
-      embedUrl: url,
+      embedUrl: null, // GitHub blocks all iframes (X-Frame-Options: deny)
     };
   }
 
@@ -231,6 +235,92 @@ function transformBookmark(b: ZBookmark, index: number) {
     platform,
     domain: url ? platform.name : "web",
   };
+}
+
+// ─── Twitter/X official oEmbed widget component ────────────────────────────
+// X blocks all third-party embeds (twitframe, etc.) with X-Frame-Options.
+// The only working solution is loading the official widgets.js script.
+// We do that inside a blob: iframe so the script can run safely without
+// affecting our app's CSP.
+function TwitterEmbedFrame({
+  url,
+  tweetId: _tweetId,
+}: {
+  url: string;
+  tweetId: string | null;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (!iframeRef.current) return;
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { margin:0; background:#15202b; display:flex; align-items:flex-start;
+           justify-content:center; padding:16px; min-height:100vh; box-sizing:border-box; }
+    .twitter-tweet { max-width:550px!important; width:100%!important; }
+  </style>
+</head>
+<body>
+  <blockquote class="twitter-tweet" data-dnt="true" data-theme="dark">
+    <a href="${url.replace(/"/g, "&quot;")}"></a>
+  </blockquote>
+  <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+</body>
+</html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const blobUrl = URL.createObjectURL(blob);
+    iframeRef.current.src = blobUrl;
+    return () => URL.revokeObjectURL(blobUrl);
+  }, [url]);
+
+  return (
+    <div className="flex h-full w-full flex-col items-center overflow-y-auto bg-[#15202b]">
+      <iframe
+        ref={iframeRef}
+        title="X / Twitter post"
+        className="h-full w-full border-0"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      />
+    </div>
+  );
+}
+
+// ─── Open-in-new-tab fallback for platforms that block iframing ───────────
+function PlatformOpenInTab({
+  url,
+  platformName,
+  icon,
+  note,
+}: {
+  url: string;
+  platformName: string;
+  icon: string;
+  note: string;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-2xl bg-card text-4xl shadow-inner">
+        {icon}
+      </div>
+      <div className="space-y-1">
+        <h4 className="text-base font-bold text-foreground">{platformName}</h4>
+        <p className="max-w-xs text-sm text-muted-foreground">{note}</p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:bg-amber-600 active:scale-95"
+      >
+        <ExternalLink className="size-4" />
+        Open on {platformName}
+      </a>
+    </div>
+  );
 }
 
 export default function BookmarksDirectoryView({
@@ -1350,10 +1440,13 @@ export default function BookmarksDirectoryView({
                 />
               ) : activeEmbedItem.platform.type === "twitter" &&
                 activeEmbedItem.platform.embedUrl ? (
-                <iframe
-                  src={activeEmbedItem.platform.embedUrl}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0 bg-white"
+                // ── Official Twitter / X oEmbed widget ──────────────────────
+                // X blocks third-party iframes (twitframe etc.).
+                // We render the official blockquote + widgets.js inside a
+                // sandboxed iframe HTML blob so the script executes safely.
+                <TwitterEmbedFrame
+                  url={activeEmbedItem.platform.embedUrl}
+                  tweetId={activeEmbedItem.platform.videoId}
                 />
               ) : activeEmbedItem.platform.type === "instagram" &&
                 activeEmbedItem.platform.embedUrl ? (
@@ -1362,8 +1455,23 @@ export default function BookmarksDirectoryView({
                   title={activeEmbedItem.title}
                   className="h-full w-full border-0 bg-white"
                 />
-              ) : activeEmbedItem.platform.type === "reddit" ||
-                activeEmbedItem.platform.type === "github" ? (
+              ) : activeEmbedItem.platform.type === "github" ? (
+                // ── GitHub blocks all iframing — show open-in-tab UI ─────────
+                <PlatformOpenInTab
+                  url={activeEmbedItem.url}
+                  platformName="GitHub"
+                  icon="🐙"
+                  note="GitHub blocks embedding in iframes. Click below to open the repo."
+                />
+              ) : activeEmbedItem.platform.type === "twitter" ? (
+                // ── X profile / non-tweet link — no tweet ID to embed ────────
+                <PlatformOpenInTab
+                  url={activeEmbedItem.url}
+                  platformName="X / Twitter"
+                  icon="𝕏"
+                  note="Only individual tweets can be embedded. Click below to open on X."
+                />
+              ) : activeEmbedItem.platform.type === "reddit" ? (
                 <iframe
                   src={activeEmbedItem.url}
                   title={activeEmbedItem.title}
