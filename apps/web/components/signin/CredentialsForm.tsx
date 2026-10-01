@@ -46,6 +46,8 @@ export default function CredentialsForm() {
     setSigninError(`${OAUTH_FAILED} ${oAuthError}`);
   }
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const form = useForm<z.infer<typeof signInSchema>>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
@@ -73,6 +75,8 @@ export default function CredentialsForm() {
     );
   }
 
+  const isPending = isLoading || form.formState.isSubmitting || isRedirecting;
+
   return (
     <div className="space-y-6">
       {/* Full-screen redirect loader — shown after successful login */}
@@ -93,26 +97,36 @@ export default function CredentialsForm() {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(async (value) => {
-            const resp = await signIn("credentials", {
-              redirect: false,
-              email: value.email.trim(),
-              password: value.password,
-            });
-            if (!resp || !resp?.ok || resp.error) {
-              if (resp?.error === "CredentialsSignin") {
-                setSigninError(SIGNIN_FAILED);
-              } else if (resp?.error === VERIFY_EMAIL_ERROR) {
-                router.replace(
-                  `/check-email?email=${encodeURIComponent(value.email.trim())}`,
-                );
-              } else {
-                setSigninError(resp?.error ?? SIGNIN_FAILED);
+            setSigninError("");
+            setIsLoading(true);
+            try {
+              const resp = await signIn("credentials", {
+                redirect: false,
+                email: value.email.trim(),
+                password: value.password,
+              });
+              if (!resp || !resp?.ok || resp.error) {
+                setIsLoading(false);
+                if (resp?.error === "CredentialsSignin") {
+                  setSigninError(SIGNIN_FAILED);
+                } else if (resp?.error === VERIFY_EMAIL_ERROR) {
+                  router.replace(
+                    `/check-email?email=${encodeURIComponent(value.email.trim())}`,
+                  );
+                } else {
+                  setSigninError(resp?.error ?? SIGNIN_FAILED);
+                }
+                return;
               }
-              return;
+              // Show branded loading overlay and navigate with fresh session cookies
+              setIsRedirecting(true);
+              window.location.href = "/dashboard/bookmarks";
+            } catch (err) {
+              setIsLoading(false);
+              setSigninError(
+                err instanceof Error ? err.message : SIGNIN_FAILED,
+              );
             }
-            // Show branded loading overlay while Next.js fetches the dashboard
-            setIsRedirecting(true);
-            router.replace("/");
           })}
           className="space-y-4"
         >
@@ -183,10 +197,18 @@ export default function CredentialsForm() {
           <ActionButton
             ignoreDemoMode
             type="submit"
-            loading={form.formState.isSubmitting}
+            loading={isPending}
+            disabled={isPending}
             className="w-full"
           >
-            Sign In
+            {isPending ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Signing in...</span>
+              </span>
+            ) : (
+              "Sign In"
+            )}
           </ActionButton>
 
           <div className="text-center">

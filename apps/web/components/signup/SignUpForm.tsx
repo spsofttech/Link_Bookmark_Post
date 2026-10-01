@@ -164,7 +164,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               if (isMobileAppRedirect(redirectUrl)) {
                 window.location.href = redirectUrl;
               } else {
-                router.replace(redirectUrl);
+                window.location.href = redirectUrl || "/dashboard/bookmarks";
               }
             })}
             className="space-y-4"
