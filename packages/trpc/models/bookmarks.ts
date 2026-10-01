@@ -225,6 +225,39 @@ export class Bookmark extends BareBookmark {
         content: includeContent ? asset.content : null,
       };
     }
+    if (content.type === BookmarkTypes.UNKNOWN) {
+      const URL_REGEX = /(https?:\/\/[^\s"'<>)]+)/i;
+      const foundUrl =
+        bookmark.note?.match(URL_REGEX)?.[1] ||
+        bookmark.title?.match(URL_REGEX)?.[1];
+      if (foundUrl) {
+        const cleanUrl = foundUrl.trim().replace(/[.,;:]+$/, "");
+        content = {
+          type: BookmarkTypes.LINK,
+          url: cleanUrl,
+          title: bookmark.title || cleanUrl,
+          description: bookmark.note || "",
+          imageUrl: null,
+          favicon: null,
+          htmlContent: null,
+          readerViewStatus: null,
+          readerViewScore: null,
+          preferredPreview: null,
+          crawledAt: null,
+          crawlStatus: "pending",
+          author: null,
+          publisher: null,
+          datePublished: null,
+          dateModified: null,
+        };
+      } else if (bookmark.note || bookmark.title) {
+        content = {
+          type: BookmarkTypes.TEXT,
+          text: bookmark.note || bookmark.title || "",
+          sourceUrl: null,
+        };
+      }
+    }
 
     return {
       tags: tagsOnBookmarks
@@ -759,9 +792,36 @@ export class Bookmark extends BareBookmark {
           content: input.includeContent ? (item.asset.content ?? null) : null,
         };
       } else {
-        content = {
-          type: BookmarkTypes.UNKNOWN,
-        };
+        const URL_REGEX = /(https?:\/\/[^\s"'<>)]+)/i;
+        const foundUrl =
+          b.note?.match(URL_REGEX)?.[1] || b.title?.match(URL_REGEX)?.[1];
+        if (foundUrl) {
+          const cleanUrl = foundUrl.trim().replace(/[.,;:]+$/, "");
+          content = {
+            type: BookmarkTypes.LINK,
+            url: cleanUrl,
+            title: b.title || cleanUrl,
+            description: b.note || "",
+            imageUrl: null,
+            favicon: null,
+            htmlContent: null,
+            readerViewStatus: null,
+            readerViewScore: null,
+            preferredPreview: null,
+            crawledAt: null,
+            crawlStatus: "pending",
+            author: null,
+            publisher: null,
+            datePublished: null,
+            dateModified: null,
+          };
+        } else {
+          content = {
+            type: BookmarkTypes.TEXT,
+            text: b.note || b.title || "",
+            sourceUrl: null,
+          };
+        }
       }
 
       bookmarksRes[bId] = {

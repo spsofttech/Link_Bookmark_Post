@@ -39,6 +39,22 @@ export default function BookmarkCard({
 
   switch (bookmark.content.type) {
     case BookmarkTypes.LINK:
+      if (!bookmark.content.url) {
+        return (
+          <TextCard
+            className={className}
+            bookmarkIndex={bookmarkIndex}
+            bookmark={{
+              ...bookmark,
+              content: {
+                type: BookmarkTypes.TEXT,
+                text: bookmark.note || bookmark.title || "Note",
+                sourceUrl: null,
+              },
+            }}
+          />
+        );
+      }
       return (
         <LinkCard
           className={className}

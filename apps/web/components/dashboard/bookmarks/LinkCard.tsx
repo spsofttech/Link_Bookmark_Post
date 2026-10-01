@@ -23,15 +23,16 @@ import { renderTextWithLinks } from "./NotePreview";
 
 const useOnClickUrl = (bookmark: ZBookmarkTypeLink) => {
   const userSettings = useUserSettings();
+  const clickAction = userSettings?.bookmarkClickAction;
   return {
     urlTarget:
-      userSettings.bookmarkClickAction === "open_original_link"
+      clickAction === "open_original_link"
         ? ("_blank" as const)
         : ("_self" as const),
     onClickUrl:
-      userSettings.bookmarkClickAction === "expand_bookmark_preview"
+      clickAction === "expand_bookmark_preview"
         ? `/dashboard/preview/${bookmark.id}`
-        : bookmark.content.url,
+        : bookmark.content?.url || "#",
   };
 };
 
@@ -160,14 +161,15 @@ function LinkCardContent({
   const [isExpanded, setIsExpanded] = useState(false);
   const { onClickUrl, urlTarget } = useOnClickUrl(bookmark);
 
-  const url = bookmark.content.url;
-  const rawTitle = bookmark.content.title;
+  const url = bookmark.content?.url || "";
+  const rawTitle = bookmark.content?.title || bookmark.title || "";
   const showTitle = Boolean(
     rawTitle &&
     rawTitle.trim() !== "" &&
     rawTitle.trim().toLowerCase() !== url.trim().toLowerCase(),
   );
-  const description = bookmark.content.description || bookmark.summary || "";
+  const description =
+    bookmark.content?.description || bookmark.summary || bookmark.note || "";
 
   return (
     <div className="flex w-full flex-col gap-1 text-left">

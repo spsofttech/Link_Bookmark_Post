@@ -387,20 +387,26 @@ export const bookmarksAppRouter = router({
         const batch = input.bookmarks.slice(i, i + BATCH_SIZE);
         await ctx.db.transaction(async (tx) => {
           for (const item of batch) {
-            const rawUrl = item.url?.trim();
-            if (
-              item.type === "link" &&
-              !rawUrl &&
-              !item.title &&
-              !item.content &&
-              !item.note
-            ) {
+            const URL_REGEX = /(https?:\/\/[^\s"'<>)]+)/i;
+            let finalUrl = item.url?.trim() || "";
+            if (!finalUrl) {
+              const match =
+                item.note?.match(URL_REGEX)?.[1] ||
+                item.content?.match(URL_REGEX)?.[1] ||
+                item.title?.match(URL_REGEX)?.[1];
+              if (match) {
+                finalUrl = match.trim().replace(/[.,;:]+$/, "");
+              }
+            }
+
+            if (!finalUrl && !item.title && !item.content && !item.note) {
               skippedCount++;
               continue;
             }
 
+            const isLink = item.type !== "text" && Boolean(finalUrl);
             const createdAt = item.sourceAddedAt ?? new Date();
-            const cleanTitle = (item.title || rawUrl || "Untitled")
+            const cleanTitle = (item.title || finalUrl || "Untitled")
               .trim()
               .split("\n")[0]
               .slice(0, 200);
@@ -410,10 +416,7 @@ export const bookmarksAppRouter = router({
               .values({
                 userId,
                 title: cleanTitle,
-                type:
-                  item.type === "text" || !rawUrl
-                    ? BookmarkTypes.TEXT
-                    : BookmarkTypes.LINK,
+                type: isLink ? BookmarkTypes.LINK : BookmarkTypes.TEXT,
                 note: item.note || undefined,
                 createdAt,
                 modifiedAt: createdAt,
@@ -429,20 +432,20 @@ export const bookmarksAppRouter = router({
               continue;
             }
 
-            if (item.type === "link" && rawUrl) {
+            if (isLink && finalUrl) {
               await tx
                 .insert(bookmarkLinks)
                 .values({
                   id: createdBookmark.id,
-                  url: rawUrl,
+                  url: finalUrl,
                   title: cleanTitle,
-                  description: item.description || undefined,
+                  description: item.description || item.note || undefined,
                   imageUrl: item.imageUrl || undefined,
                   crawlStatus: "pending",
                   crawlStatusCode: 200,
                 })
                 .onConflictDoNothing();
-              existingUrlSet.add(rawUrl.toLowerCase());
+              existingUrlSet.add(finalUrl.toLowerCase());
             } else {
               await tx
                 .insert(bookmarkTexts)

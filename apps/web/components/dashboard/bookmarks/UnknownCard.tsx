@@ -1,11 +1,7 @@
-"use client";
-
-import { useTranslation } from "@/lib/i18n/client";
-import { AlertCircle } from "lucide-react";
-
 import type { ZBookmark } from "@karakeep/shared/types/bookmarks";
 
 import { BookmarkLayoutAdaptingCard } from "./BookmarkLayoutAdaptingCard";
+import { renderTextWithLinks } from "./NotePreview";
 
 export default function UnknownCard({
   bookmark,
@@ -16,7 +12,8 @@ export default function UnknownCard({
   className?: string;
   bookmarkIndex?: number;
 }) {
-  const { t } = useTranslation();
+  const displayContent =
+    bookmark.summary || bookmark.note || bookmark.title || "Note";
   return (
     <BookmarkLayoutAdaptingCard
       title={bookmark.title}
@@ -25,11 +22,10 @@ export default function UnknownCard({
       bookmarkIndex={bookmarkIndex}
       wrapTags={false}
       image={(_layout) => (
-        <div className="flex size-full flex-1 flex-col items-center justify-center bg-red-50 dark:bg-red-950/10">
-          <AlertCircle className="mb-3 h-10 w-10 text-red-500" />
-          <h3 className="font-medium text-red-700 dark:text-red-400">
-            {t("common.something_went_wrong")}
-          </h3>
+        <div className="flex size-full flex-1 flex-col justify-start overflow-hidden bg-card p-4 text-left">
+          <p className="line-clamp-6 text-sm text-foreground/90">
+            {renderTextWithLinks(displayContent)}
+          </p>
         </div>
       )}
     />

@@ -18,6 +18,15 @@ export type EmbedInfo =
   | { type: "card"; embedUrl: string; domain: string }
   | { type: "iframe"; embedUrl: string };
 
+function normalizeUrl(urlStr: string): string {
+  const trimmed = (urlStr || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 function isFrameRestrictedHost(host: string, pathname: string): boolean {
   if (host.includes("linkedin.com")) return true;
   if (host.includes("medium.com")) return true;
@@ -38,16 +47,17 @@ function isFrameRestrictedHost(host: string, pathname: string): boolean {
   return false;
 }
 
-export function getEmbedInfo(urlStr: string): EmbedInfo | null {
+export function getEmbedInfo(urlStr: string): EmbedInfo {
+  const cleanUrl = normalizeUrl(urlStr);
   try {
-    const url = new URL(urlStr);
-    const host = url.hostname.replace("www.", "").toLowerCase();
+    const url = new URL(cleanUrl);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
 
     // Notion Pages & Workspaces
     if (host.includes("notion.site") || host.includes("notion.so")) {
       return {
         type: "notion",
-        embedUrl: urlStr,
+        embedUrl: cleanUrl,
         domain: host,
       };
     }
@@ -57,7 +67,7 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
       const parts = url.pathname.split("/").filter(Boolean);
       const statusIdx = parts.indexOf("status");
       if (statusIdx !== -1 && parts[statusIdx + 1]) {
-        const tweetId = parts[statusIdx + 1];
+        const tweetId = parts[statusIdx + 1].split("?")[0];
         return {
           type: "twitter",
           embedUrl: `https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=dark`,
@@ -65,24 +75,29 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
       }
       return {
         type: "twitter",
-        embedUrl: urlStr,
+        embedUrl: cleanUrl,
       };
     }
 
     // GitHub Repositories
     if (host.includes("github.com")) {
       const parts = url.pathname.split("/").filter(Boolean);
-      if (parts.length >= 2) {
+      if (
+        parts.length >= 2 &&
+        !["explore", "trending", "topics", "settings", "marketplace"].includes(
+          parts[0],
+        )
+      ) {
         return {
           type: "github",
-          embedUrl: urlStr,
+          embedUrl: cleanUrl,
           owner: parts[0],
           repo: parts[1],
         };
       }
       return {
         type: "card",
-        embedUrl: urlStr,
+        embedUrl: cleanUrl,
         domain: "github.com",
       };
     }
@@ -91,33 +106,54 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
     if (host.includes("threads.net") || host.includes("threads.com")) {
       return {
         type: "threads",
-        embedUrl: urlStr,
+        embedUrl: cleanUrl,
       };
     }
 
     // Instagram Posts & Profiles
     if (host.includes("instagram.com")) {
       const parts = url.pathname.split("/").filter(Boolean);
-      if ((parts[0] === "p" || parts[0] === "reel") && parts[1]) {
+      // Handles /p/CODE, /reel/CODE, /reels/CODE, /tv/CODE, /share/p/CODE, etc.
+      let code = "";
+      if (parts[0] === "share" && parts[1] && parts[2]) {
+        code = parts[2];
+      } else if (
+        (parts[0] === "p" ||
+          parts[0] === "reel" ||
+          parts[0] === "reels" ||
+          parts[0] === "tv") &&
+        parts[1]
+      ) {
+        code = parts[1];
+      }
+
+      if (code) {
         return {
           type: "instagram",
-          embedUrl: `https://www.instagram.com/${parts[0]}/${parts[1]}/embed`,
+          embedUrl: `https://www.instagram.com/p/${code}/embed`,
         };
       }
       if (
         parts[0] &&
-        !["explore", "reels", "stories", "direct"].includes(parts[0])
+        ![
+          "explore",
+          "reels",
+          "stories",
+          "direct",
+          "accounts",
+          "legal",
+        ].includes(parts[0])
       ) {
         return {
           type: "instagram-profile",
-          embedUrl: urlStr,
+          embedUrl: cleanUrl,
           username: parts[0],
         };
       }
     }
 
-    // Google Docs, Sheets, Slides
-    if (host.includes("docs.google.com")) {
+    // Google Docs, Sheets, Slides, Drive
+    if (host.includes("docs.google.com") || host.includes("drive.google.com")) {
       if (url.pathname.includes("/document/d/")) {
         const docId = url.pathname.split("/document/d/")[1]?.split("/")[0];
         if (docId) {
@@ -149,17 +185,26 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
           };
         }
       }
+      if (url.pathname.includes("/file/d/")) {
+        const fileId = url.pathname.split("/file/d/")[1]?.split("/")[0];
+        if (fileId) {
+          return {
+            embedUrl: `https://drive.google.com/file/d/${fileId}/preview`,
+            type: "google-docs",
+          };
+        }
+      }
     }
 
     // YouTube
     if (host.includes("youtube.com") || host.includes("youtu.be")) {
       let videoId = "";
       if (host.includes("youtu.be")) {
-        videoId = url.pathname.slice(1);
+        videoId = url.pathname.slice(1).split("?")[0];
       } else if (url.pathname.includes("/embed/")) {
-        videoId = url.pathname.split("/embed/")[1];
+        videoId = url.pathname.split("/embed/")[1]?.split("?")[0] || "";
       } else if (url.pathname.includes("/shorts/")) {
-        videoId = url.pathname.split("/shorts/")[1];
+        videoId = url.pathname.split("/shorts/")[1]?.split("?")[0] || "";
       } else {
         videoId = url.searchParams.get("v") || "";
       }
@@ -197,17 +242,21 @@ export function getEmbedInfo(urlStr: string): EmbedInfo | null {
     if (isFrameRestrictedHost(host, url.pathname)) {
       return {
         type: "card",
-        embedUrl: urlStr,
+        embedUrl: cleanUrl,
         domain: host,
       };
     }
 
     return {
-      embedUrl: urlStr,
+      embedUrl: cleanUrl,
       type: "iframe",
     };
   } catch {
-    return null;
+    return {
+      type: "card",
+      embedUrl: cleanUrl || urlStr,
+      domain: "Web Link",
+    };
   }
 }
 

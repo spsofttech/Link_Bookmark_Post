@@ -81,26 +81,52 @@ export function useBookmarkImport() {
         }
       }
 
-      // Perform fast, direct database import with 100% data preservation
-      const directResult = await directImportBookmarks({
-        listName: t("settings.import.imported_bookmarks"),
-        bookmarks: parsedImport.bookmarks.map((b) => ({
-          type: (b.content?.type === "text" ? "text" : "link") as
-            | "link"
-            | "text",
-          url: b.content?.type === "link" ? b.content.url : undefined,
-          title: b.title,
-          content: b.content?.type === "text" ? b.content.text : undefined,
-          description: b.description,
-          note: b.notes,
-          favourited: b.favourited,
-          imageUrl: b.imageUrl,
-          lists: b.lists ?? [],
-          tags: b.tags ?? [],
-          sourceAddedAt: b.addDate ? new Date(b.addDate * 1000) : undefined,
-          archived: b.archived,
-        })),
-      });
+      const mappedBookmarks = parsedImport.bookmarks.map((b) => ({
+        type: (b.content?.type === "text" ? "text" : "link") as "link" | "text",
+        url: b.content?.type === "link" ? b.content.url : undefined,
+        title: b.title,
+        content: b.content?.type === "text" ? b.content.text : undefined,
+        description: b.description,
+        note: b.notes,
+        favourited: b.favourited,
+        imageUrl: b.imageUrl,
+        lists: b.lists ?? [],
+        tags: b.tags ?? [],
+        sourceAddedAt: b.addDate ? new Date(b.addDate * 1000) : undefined,
+        archived: b.archived,
+      }));
+
+      const CHUNK_SIZE = 250;
+      let totalImported = 0;
+      let totalSkipped = 0;
+      let rootListId: string | null = null;
+
+      const fileSessionId = `import_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      currentImportIds.current.set(file, fileSessionId);
+      setImportProgress((prev) => ({
+        ...prev,
+        [fileSessionId]: { done: 0, total: mappedBookmarks.length },
+      }));
+
+      for (let i = 0; i < mappedBookmarks.length; i += CHUNK_SIZE) {
+        const chunk = mappedBookmarks.slice(i, i + CHUNK_SIZE);
+        const chunkResult = await directImportBookmarks({
+          listName: t("settings.import.imported_bookmarks"),
+          bookmarks: chunk,
+        });
+
+        totalImported += chunkResult.importedCount;
+        totalSkipped += chunkResult.skippedCount;
+        if (!rootListId && chunkResult.rootListId) {
+          rootListId = chunkResult.rootListId;
+        }
+
+        const doneCount = Math.min(i + chunk.length, mappedBookmarks.length);
+        setImportProgress((prev) => ({
+          ...prev,
+          [fileSessionId]: { done: doneCount, total: mappedBookmarks.length },
+        }));
+      }
 
       // Perform a complete invalidation of all bookmark, list, tag, and stats queries
       // so homepage, grids, and counters update instantly with imported data
@@ -113,16 +139,24 @@ export function useBookmarkImport() {
 
       return {
         counts: {
-          successes: directResult.importedCount,
+          successes: totalImported,
           failures: 0,
-          alreadyExisted: directResult.skippedCount,
-          total: directResult.total,
+          alreadyExisted: totalSkipped,
+          total: mappedBookmarks.length,
         },
-        rootListId: directResult.rootListId,
-        importSessionId: null,
+        rootListId,
+        importSessionId: fileSessionId,
       };
     },
     onSuccess: async (result, variables) => {
+      const id = currentImportIds.current.get(variables.file);
+      if (id) {
+        setImportProgress((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }
       currentImportIds.current.delete(variables.file);
 
       if (result.counts.total === 0) {
