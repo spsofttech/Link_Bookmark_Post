@@ -72,10 +72,10 @@ export default function ReaderView({
         description: "Highlight has been created!",
       });
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: "Something went wrong",
+        description: err?.message || "Failed to create highlight",
       });
     },
   });
@@ -86,10 +86,10 @@ export default function ReaderView({
         description: "Highlight has been updated!",
       });
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: "Something went wrong",
+        description: err?.message || "Failed to update highlight",
       });
     },
   });
@@ -100,10 +100,10 @@ export default function ReaderView({
         description: "Highlight has been deleted!",
       });
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: "Something went wrong",
+        description: err?.message || "Failed to delete highlight",
       });
     },
   });

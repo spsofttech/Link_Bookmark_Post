@@ -42,11 +42,11 @@ export default function BulkBookmarksAction() {
   const pathname = usePathname();
   const currentPathnameRef = useRef(pathname);
 
-  const onError = () => {
+  const onError = (err?: { message?: string }) => {
     toast({
       variant: "destructive",
-      title: "Something went wrong",
-      description: "There was a problem with your request.",
+      title: "Action failed",
+      description: err?.message || "There was a problem with your request.",
     });
   };
   const bulkActionsStore = useBulkActionsStore();
