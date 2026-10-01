@@ -147,15 +147,15 @@ export class Asset {
       });
     }
 
-    await ctx.db.transaction((tx) => {
-      tx.delete(assets).where(eq(assets.id, input.oldAssetId)).run();
-      tx.update(assets)
+    await ctx.db.transaction(async (tx) => {
+      await tx.delete(assets).where(eq(assets.id, input.oldAssetId));
+      await tx
+        .update(assets)
         .set({
           bookmarkId: input.bookmarkId,
           assetType: oldAsset.asset.assetType,
         })
-        .where(eq(assets.id, input.newAssetId))
-        .run();
+        .where(eq(assets.id, input.newAssetId));
     });
 
     await deleteAsset({
@@ -193,7 +193,7 @@ export class Asset {
           eq(assets.bookmarkId, input.bookmarkId),
         ),
       );
-    if (result.changes == 0) {
+    if ((result.rowCount ?? 0) == 0) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
     await deleteAsset({ userId: ctx.user.id, assetId: input.assetId }).catch(

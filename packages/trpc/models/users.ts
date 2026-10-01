@@ -64,7 +64,7 @@ export class User {
     ctx: Context,
     input: z.infer<typeof zSignUpSchema> & { redirectUrl?: string },
     role?: "user" | "admin",
-  ) {
+  ): Promise<typeof users.$inferSelect> {
     const salt = generatePasswordSalt();
     const user = await User.createRaw(ctx.db, {
       name: input.name,
@@ -101,61 +101,58 @@ export class User {
       role?: "user" | "admin";
       emailVerified?: Date | null;
     },
-  ) {
+  ): Promise<typeof users.$inferSelect> {
     // This transaction reads before writing, so reserve the writer slot before
     // taking a WAL snapshot that another connection could invalidate.
-    return await db.transaction(
-      (trx) => {
-        let userRole = input.role;
-        if (!userRole) {
-          const [{ count: userCount }] = trx
-            .select({ count: count() })
-            .from(users)
-            .all();
-          userRole = userCount === 0 ? "admin" : "user";
-        }
+    return await db.transaction(async (trx) => {
+      let userRole = input.role;
+      if (!userRole) {
+        const [{ count: userCount }] = await trx
+          .select({ count: count() })
+          .from(users);
+        userRole = Number(userCount) === 0 ? "admin" : "user";
+      }
 
-        try {
-          const [result] = trx
-            .insert(users)
-            .values({
-              name: input.name,
-              email: input.email,
-              password: input.password,
-              salt: input.salt,
-              role: userRole,
-              emailVerified: input.emailVerified,
-              bookmarkQuota: serverConfig.quotas.free.bookmarkLimit,
-              storageQuota: serverConfig.quotas.free.assetSizeBytes,
-            })
-            .returning()
-            .all();
+      try {
+        const [result] = await trx
+          .insert(users)
+          .values({
+            name: input.name,
+            email: input.email,
+            password: input.password,
+            salt: input.salt,
+            role: userRole,
+            emailVerified: input.emailVerified,
+            bookmarkQuota: serverConfig.quotas.free.bookmarkLimit,
+            storageQuota: serverConfig.quotas.free.assetSizeBytes,
+          })
+          .returning();
 
-          return result;
-        } catch (e: unknown) {
-          console.error("Error creating user in User.createRaw:", e);
-          const err = e as { code?: string; message?: string };
-          const isUniqueConstraint =
-            (e instanceof SqliteError &&
-              e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
-            err?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
-            (typeof err?.message === "string" &&
-              err.message.includes("UNIQUE constraint failed"));
+        return result;
+      } catch (e: unknown) {
+        console.error("Error creating user in User.createRaw:", e);
+        const err = e as { code?: string; message?: string };
+        const isUniqueConstraint =
+          (e instanceof SqliteError && e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
+          err?.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+          err?.code === "23505" ||
+          (typeof err?.message === "string" &&
+            (err.message.includes("UNIQUE constraint failed") ||
+              err.message.includes("unique constraint") ||
+              err.message.includes("duplicate key")));
 
-          if (isUniqueConstraint) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Email is already taken",
-            });
-          }
+        if (isUniqueConstraint) {
           throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: e instanceof Error ? e.message : "Something went wrong",
+            code: "BAD_REQUEST",
+            message: "Email is already taken",
           });
         }
-      },
-      { behavior: "immediate" },
-    );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: e instanceof Error ? e.message : "Something went wrong",
+        });
+      }
+    });
   }
 
   static async getAll(ctx: AuthedContext): Promise<User[]> {
@@ -236,7 +233,7 @@ export class User {
       .set({ emailVerified: new Date() })
       .where(eq(users.email, email));
 
-    if (result.changes === 0) {
+    if ((result.rowCount ?? 0) === 0) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "User not found",
@@ -306,19 +303,17 @@ export class User {
       const token = randomBytes(32).toString("hex");
       const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-      await ctx.db.transaction((tx) => {
+      await ctx.db.transaction(async (tx) => {
         // Invalidate any existing reset tokens for this user
-        tx.delete(passwordResetTokens)
-          .where(eq(passwordResetTokens.userId, user.id))
-          .run();
+        await tx
+          .delete(passwordResetTokens)
+          .where(eq(passwordResetTokens.userId, user.id));
 
-        tx.insert(passwordResetTokens)
-          .values({
-            userId: user.id,
-            token,
-            expires,
-          })
-          .run();
+        await tx.insert(passwordResetTokens).values({
+          userId: user.id,
+          token,
+          expires,
+        });
       });
 
       // Deliberately not awaited. Delivery latency is only incurred for real
@@ -421,7 +416,7 @@ export class User {
 
     const res = await db.delete(users).where(eq(users.id, userId));
 
-    if (res.changes === 0) {
+    if ((res.rowCount ?? 0) === 0) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
 
@@ -664,18 +659,18 @@ export class User {
       return;
     }
 
-    await this.ctx.db.transaction((tx) => {
-      tx.update(users)
+    await this.ctx.db.transaction(async (tx) => {
+      await tx
+        .update(users)
         .set({ image: assetId })
-        .where(eq(users.id, this.user.id))
-        .run();
+        .where(eq(users.id, this.user.id));
 
       if (!previousImage || previousImage === assetId) {
         return;
       }
 
       if (previousAsset && !previousAsset.bookmarkId) {
-        tx.delete(assets).where(eq(assets.id, previousAsset.id)).run();
+        await tx.delete(assets).where(eq(assets.id, previousAsset.id));
       }
     });
 

@@ -103,8 +103,8 @@ export async function handleAsAssetBookmark(
         );
       }
       const fileName = path.basename(new URL(url).pathname);
-      await db.transaction((trx) => {
-        updateAsset(
+      await db.transaction(async (trx) => {
+        await updateAsset(
           undefined,
           {
             id: downloaded.assetId,
@@ -117,24 +117,20 @@ export async function handleAsAssetBookmark(
           },
           trx,
         );
-        trx
-          .insert(bookmarkAssets)
-          .values({
-            id: bookmarkId,
-            assetType,
-            assetId: downloaded.assetId,
-            content: null,
-            fileName,
-            sourceUrl: url,
-          })
-          .run();
+        await trx.insert(bookmarkAssets).values({
+          id: bookmarkId,
+          assetType,
+          assetId: downloaded.assetId,
+          content: null,
+          fileName,
+          sourceUrl: url,
+        });
         // Switch the type of the bookmark from LINK to ASSET
-        trx
+        await trx
           .update(bookmarks)
           .set({ type: BookmarkTypes.ASSET })
-          .where(eq(bookmarks.id, bookmarkId))
-          .run();
-        trx.delete(bookmarkLinks).where(eq(bookmarkLinks.id, bookmarkId)).run();
+          .where(eq(bookmarks.id, bookmarkId));
+        await trx.delete(bookmarkLinks).where(eq(bookmarkLinks.id, bookmarkId));
       });
       await AssetPreprocessingQueue.enqueue(
         {
@@ -400,8 +396,8 @@ export async function crawlAndParseUrl(
           ? (readableContent?.content ?? null)
           : null;
       readableContent = null;
-      await db.transaction((txn) => {
-        txn
+      await db.transaction(async (txn) => {
+        await txn
           .update(bookmarkLinks)
           .set({
             crawledAt: new Date(),
@@ -416,11 +412,10 @@ export async function crawlAndParseUrl(
             readerViewClassifierVersion:
               readerViewAssessment?.classifierVersion ?? null,
           })
-          .where(eq(bookmarkLinks.id, bookmarkId))
-          .run();
+          .where(eq(bookmarkLinks.id, bookmarkId));
 
         if (screenshotAssetInfo) {
-          updateAsset(
+          await updateAsset(
             oldAssets.screenshotAssetId,
             {
               id: screenshotAssetInfo.assetId,
@@ -436,7 +431,7 @@ export async function crawlAndParseUrl(
           assetIdsToDelete.push(oldAssets.screenshotAssetId);
         }
         if (pdfAssetInfo) {
-          updateAsset(
+          await updateAsset(
             oldAssets.pdfAssetId,
             {
               id: pdfAssetInfo.assetId,
@@ -452,11 +447,11 @@ export async function crawlAndParseUrl(
           assetIdsToDelete.push(oldAssets.pdfAssetId);
         }
         if (imageAssetInfo) {
-          updateAsset(oldAssets.imageAssetId, imageAssetInfo, txn);
+          await updateAsset(oldAssets.imageAssetId, imageAssetInfo, txn);
           assetIdsToDelete.push(oldAssets.imageAssetId);
         }
         if (htmlContentAssetInfo.result === "stored") {
-          updateAsset(
+          await updateAsset(
             oldAssets.contentAssetId,
             {
               id: htmlContentAssetInfo.assetId,
@@ -472,10 +467,9 @@ export async function crawlAndParseUrl(
           assetIdsToDelete.push(oldAssets.contentAssetId);
         } else if (oldAssets.contentAssetId) {
           // Unlink the old content asset
-          txn
+          await txn
             .delete(assets)
-            .where(eq(assets.id, oldAssets.contentAssetId))
-            .run();
+            .where(eq(assets.id, oldAssets.contentAssetId));
           assetIdsToDelete.push(oldAssets.contentAssetId);
         }
       });
@@ -506,8 +500,8 @@ export async function crawlAndParseUrl(
               contentType,
             } = archiveResult;
 
-            await db.transaction((txn) => {
-              updateAsset(
+            await db.transaction(async (txn) => {
+              await updateAsset(
                 oldAssets.fullPageArchiveAssetId,
                 {
                   id: fullPageArchiveAssetId,

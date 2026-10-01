@@ -1,4 +1,4 @@
-import { sqlite, syncAllToSupabase } from "@karakeep/db";
+import { syncAllToSupabase } from "@karakeep/db";
 import { experimental_trpcMiddleware, TRPCError } from "@trpc/server";
 import {
   and,
@@ -385,156 +385,142 @@ export const bookmarksAppRouter = router({
       const BATCH_SIZE = 50;
       for (let i = 0; i < input.bookmarks.length; i += BATCH_SIZE) {
         const batch = input.bookmarks.slice(i, i + BATCH_SIZE);
-        await ctx.db.transaction(
-          (tx) => {
-            for (const item of batch) {
-              const rawUrl = item.url?.trim();
-              if (
-                item.type === "link" &&
-                !rawUrl &&
-                !item.title &&
-                !item.content &&
-                !item.note
-              ) {
-                skippedCount++;
-                continue;
-              }
+        await ctx.db.transaction(async (tx) => {
+          for (const item of batch) {
+            const rawUrl = item.url?.trim();
+            if (
+              item.type === "link" &&
+              !rawUrl &&
+              !item.title &&
+              !item.content &&
+              !item.note
+            ) {
+              skippedCount++;
+              continue;
+            }
 
-              const createdAt = item.sourceAddedAt ?? new Date();
-              const cleanTitle = (item.title || rawUrl || "Untitled")
-                .trim()
-                .split("\n")[0]
-                .slice(0, 200);
+            const createdAt = item.sourceAddedAt ?? new Date();
+            const cleanTitle = (item.title || rawUrl || "Untitled")
+              .trim()
+              .split("\n")[0]
+              .slice(0, 200);
 
-              const createdBookmark = tx
-                .insert(bookmarks)
-                .values({
-                  userId,
-                  title: cleanTitle,
-                  type:
-                    item.type === "text" || !rawUrl
-                      ? BookmarkTypes.TEXT
-                      : BookmarkTypes.LINK,
-                  note: item.note || undefined,
-                  createdAt,
-                  modifiedAt: createdAt,
-                  source: "import",
-                  taggingStatus: "success",
-                  archived: item.archived ?? false,
-                  favourited: item.favourited ?? false,
-                })
-                .returning()
-                .all()[0];
+            const [createdBookmark] = await tx
+              .insert(bookmarks)
+              .values({
+                userId,
+                title: cleanTitle,
+                type:
+                  item.type === "text" || !rawUrl
+                    ? BookmarkTypes.TEXT
+                    : BookmarkTypes.LINK,
+                note: item.note || undefined,
+                createdAt,
+                modifiedAt: createdAt,
+                source: "import",
+                taggingStatus: "success",
+                archived: item.archived ?? false,
+                favourited: item.favourited ?? false,
+              })
+              .returning();
 
-              if (!createdBookmark) {
-                skippedCount++;
-                continue;
-              }
+            if (!createdBookmark) {
+              skippedCount++;
+              continue;
+            }
 
-              if (item.type === "link" && rawUrl) {
-                tx.insert(bookmarkLinks)
-                  .values({
-                    id: createdBookmark.id,
-                    url: rawUrl,
-                    title: cleanTitle,
-                    description: item.description || undefined,
-                    imageUrl: item.imageUrl || undefined,
-                    crawlStatus: "pending",
-                    crawlStatusCode: 200,
-                  })
-                  .run();
-                existingUrlSet.add(rawUrl.toLowerCase());
-              } else {
-                tx.insert(bookmarkTexts)
-                  .values({
-                    id: createdBookmark.id,
-                    text: item.content || item.note || cleanTitle,
-                  })
-                  .run();
-              }
+            if (item.type === "link" && rawUrl) {
+              tx.insert(bookmarkLinks).values({
+                id: createdBookmark.id,
+                url: rawUrl,
+                title: cleanTitle,
+                description: item.description || undefined,
+                imageUrl: item.imageUrl || undefined,
+                crawlStatus: "pending",
+                crawlStatusCode: 200,
+              });
+              existingUrlSet.add(rawUrl.toLowerCase());
+            } else {
+              await tx.insert(bookmarkTexts).values({
+                id: createdBookmark.id,
+                text: item.content || item.note || cleanTitle,
+              });
+            }
 
-              // Lists handling
-              const targetListIds = new Set<string>();
-              if (item.lists && item.lists.length > 0) {
-                for (const listName of item.lists) {
-                  const cleanListName = listName.trim();
-                  if (!cleanListName) continue;
-                  const norm = cleanListName.toLowerCase();
-                  let listId = listCache.get(norm);
-                  if (!listId) {
-                    const newList = tx
-                      .insert(bookmarkLists)
-                      .values({
-                        userId,
-                        name: cleanListName,
-                        icon: "📁",
-                        type: "manual",
-                      })
-                      .returning()
-                      .all()[0];
-                    if (newList) {
-                      listId = newList.id;
-                      listCache.set(norm, listId);
-                    }
-                  }
-                  if (listId) {
-                    targetListIds.add(listId);
-                  }
-                }
-              }
-
-              if (targetListIds.size === 0 && rootListId) {
-                targetListIds.add(rootListId);
-              }
-
-              for (const listId of targetListIds) {
-                tx.insert(bookmarksInLists)
-                  .values({
-                    bookmarkId: createdBookmark.id,
-                    listId,
-                  })
-                  .run();
-              }
-
-              for (const tagName of item.tags) {
-                const cleanTagName = tagName.trim();
-                if (!cleanTagName) continue;
-                const norm = cleanTagName.toLowerCase();
-                let tagId = tagCache.get(norm);
-                if (!tagId) {
-                  const newTag = tx
-                    .insert(bookmarkTags)
+            // Lists handling
+            const targetListIds = new Set<string>();
+            if (item.lists && item.lists.length > 0) {
+              for (const listName of item.lists) {
+                const cleanListName = listName.trim();
+                if (!cleanListName) continue;
+                const norm = cleanListName.toLowerCase();
+                let listId = listCache.get(norm);
+                if (!listId) {
+                  const [newList] = await tx
+                    .insert(bookmarkLists)
                     .values({
                       userId,
-                      name: cleanTagName,
+                      name: cleanListName,
+                      icon: "📁",
+                      type: "manual",
                     })
-                    .returning()
-                    .all()[0];
-                  if (newTag) {
-                    tagId = newTag.id;
-                    tagCache.set(norm, tagId);
+                    .returning();
+                  if (newList) {
+                    listId = newList.id;
+                    listCache.set(norm, listId);
                   }
                 }
+                if (listId) {
+                  targetListIds.add(listId);
+                }
+              }
+            }
 
-                if (tagId) {
-                  tx.insert(tagsOnBookmarks)
-                    .values({
-                      bookmarkId: createdBookmark.id,
-                      tagId,
-                      attachedBy: "human",
-                    })
-                    .run();
+            if (targetListIds.size === 0 && rootListId) {
+              targetListIds.add(rootListId);
+            }
+
+            for (const listId of targetListIds) {
+              await tx.insert(bookmarksInLists).values({
+                bookmarkId: createdBookmark.id,
+                listId,
+              });
+            }
+
+            for (const tagName of item.tags) {
+              const cleanTagName = tagName.trim();
+              if (!cleanTagName) continue;
+              const norm = cleanTagName.toLowerCase();
+              let tagId = tagCache.get(norm);
+              if (!tagId) {
+                const [newTag] = await tx
+                  .insert(bookmarkTags)
+                  .values({
+                    userId,
+                    name: cleanTagName,
+                  })
+                  .returning();
+                if (newTag) {
+                  tagId = newTag.id;
+                  tagCache.set(norm, tagId);
                 }
               }
 
-              importedCount++;
+              if (tagId) {
+                await tx.insert(tagsOnBookmarks).values({
+                  bookmarkId: createdBookmark.id,
+                  tagId,
+                  attachedBy: "human",
+                });
+              }
             }
-          },
-          { behavior: "immediate" },
-        );
+
+            importedCount++;
+          }
+        });
       }
 
-      syncAllToSupabase(sqlite).catch((err) => {
+      syncAllToSupabase().catch((err) => {
         console.warn(
           "Supabase import sync background error:",
           err?.message || err,
@@ -671,136 +657,126 @@ export const bookmarksAppRouter = router({
         }
       }
 
-      const bookmark = await ctx.db.transaction(
-        (tx) => {
-          // Check user quota
-          const quotaResult = QuotaService.canCreateBookmarkInTransaction(
-            tx,
-            ctx.user.id,
-          );
-          if (!quotaResult.result) {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: quotaResult.error,
-            });
-          }
-          const bookmark = tx
-            .insert(bookmarks)
-            .values({
-              userId: ctx.user.id,
-              title: input.title,
-              type: input.type,
-              archived: input.archived,
-              favourited: input.favourited,
-              note: input.note,
-              summary: input.summary,
-              createdAt: input.createdAt,
-              source: input.source,
-              // Only links currently support summarization. Let's set the status to null for other types for now.
-              summarizationStatus:
-                input.type === BookmarkTypes.LINK ? "pending" : null,
-            })
-            .returning()
-            .all()[0];
+      const bookmark = await ctx.db.transaction(async (tx) => {
+        // Check user quota
+        const quotaResult = await QuotaService.canCreateBookmarkInTransaction(
+          tx,
+          ctx.user.id,
+        );
+        if (!quotaResult.result) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: quotaResult.error,
+          });
+        }
+        const [bookmark] = await tx
+          .insert(bookmarks)
+          .values({
+            userId: ctx.user.id,
+            title: input.title,
+            type: input.type,
+            archived: input.archived,
+            favourited: input.favourited,
+            note: input.note,
+            summary: input.summary,
+            createdAt: input.createdAt,
+            source: input.source,
+            // Only links currently support summarization. Let's set the status to null for other types for now.
+            summarizationStatus:
+              input.type === BookmarkTypes.LINK ? "pending" : null,
+          })
+          .returning();
 
-          let content: ZBookmarkContent;
+        let content: ZBookmarkContent;
 
-          switch (input.type) {
-            case BookmarkTypes.LINK: {
-              const link = tx
-                .insert(bookmarkLinks)
-                .values({
-                  id: bookmark.id,
-                  url: input.url.trim(),
-                })
-                .returning()
-                .all()[0];
-              if (input.precrawledArchiveId) {
-                tx.update(assets)
-                  .set({
-                    bookmarkId: bookmark.id,
-                    assetType: AssetTypes.LINK_PRECRAWLED_ARCHIVE,
-                  })
-                  .where(
-                    and(
-                      eq(assets.id, input.precrawledArchiveId),
-                      eq(assets.userId, ctx.user.id),
-                    ),
-                  )
-                  .run();
-              }
-              content = {
-                type: BookmarkTypes.LINK,
-                ...link,
-              };
-              break;
-            }
-            case BookmarkTypes.TEXT: {
-              const text = tx
-                .insert(bookmarkTexts)
-                .values({
-                  id: bookmark.id,
-                  text: input.text,
-                  sourceUrl: input.sourceUrl,
-                })
-                .returning()
-                .all()[0];
-              content = {
-                type: BookmarkTypes.TEXT,
-                text: text.text ?? "",
-                sourceUrl: text.sourceUrl,
-              };
-              break;
-            }
-            case BookmarkTypes.ASSET: {
-              const [asset] = tx
-                .insert(bookmarkAssets)
-                .values({
-                  id: bookmark.id,
-                  assetType: input.assetType,
-                  assetId: input.assetId,
-                  content: null,
-                  metadata: null,
-                  fileName: input.fileName ?? null,
-                  sourceUrl: input.sourceUrl ?? null,
-                })
-                .returning()
-                .all();
+        switch (input.type) {
+          case BookmarkTypes.LINK: {
+            const [link] = await tx
+              .insert(bookmarkLinks)
+              .values({
+                id: bookmark.id,
+                url: input.url.trim(),
+              })
+              .returning();
+            if (input.precrawledArchiveId) {
               tx.update(assets)
                 .set({
                   bookmarkId: bookmark.id,
-                  assetType: AssetTypes.BOOKMARK_ASSET,
+                  assetType: AssetTypes.LINK_PRECRAWLED_ARCHIVE,
                 })
                 .where(
                   and(
-                    eq(assets.id, input.assetId),
+                    eq(assets.id, input.precrawledArchiveId),
                     eq(assets.userId, ctx.user.id),
                   ),
-                )
-                .run();
-              content = {
-                type: BookmarkTypes.ASSET,
-                assetType: asset.assetType,
-                assetId: asset.assetId,
-                fileName: asset.fileName,
-                sourceUrl: asset.sourceUrl,
-              };
-              break;
+                );
             }
+            content = {
+              type: BookmarkTypes.LINK,
+              ...link,
+            };
+            break;
           }
+          case BookmarkTypes.TEXT: {
+            const [text] = await tx
+              .insert(bookmarkTexts)
+              .values({
+                id: bookmark.id,
+                text: input.text,
+                sourceUrl: input.sourceUrl,
+              })
+              .returning();
+            content = {
+              type: BookmarkTypes.TEXT,
+              text: text?.text ?? "",
+              sourceUrl: text?.sourceUrl,
+            };
+            break;
+          }
+          case BookmarkTypes.ASSET: {
+            const [asset] = await tx
+              .insert(bookmarkAssets)
+              .values({
+                id: bookmark.id,
+                assetType: input.assetType,
+                assetId: input.assetId,
+                content: null,
+                metadata: null,
+                fileName: input.fileName ?? null,
+                sourceUrl: input.sourceUrl ?? null,
+              })
+              .returning();
+            await tx
+              .update(assets)
+              .set({
+                bookmarkId: bookmark.id,
+                assetType: AssetTypes.BOOKMARK_ASSET,
+              })
+              .where(
+                and(
+                  eq(assets.id, input.assetId),
+                  eq(assets.userId, ctx.user.id),
+                ),
+              );
+            content = {
+              type: BookmarkTypes.ASSET,
+              assetType: asset.assetType,
+              assetId: asset.assetId,
+              fileName: asset.fileName,
+              sourceUrl: asset.sourceUrl,
+            };
+            break;
+          }
+        }
 
-          return {
-            alreadyExists: false,
-            tags: [] as ZBookmarkTags[],
-            assets: [],
-            content,
-            ...bookmark,
-          };
-        },
-        {
-          behavior: "immediate",
-        },
-      );
+        return {
+          alreadyExists: false,
+          tags: [] as ZBookmarkTags[],
+          assets: [],
+          content,
+          ...bookmark,
+        };
+      });
 
       bookmarkCreationCounter.labels(input.source ?? "unknown").inc();
       addLogFields<"bookmark.create">({
@@ -888,7 +864,7 @@ export const bookmarksAppRouter = router({
           enqueueOpts,
         ),
       ]);
-      syncAllToSupabase(sqlite).catch((err) => {
+      syncAllToSupabase().catch((err) => {
         console.warn("Supabase create background error:", err?.message || err);
       });
       return bookmark;
@@ -899,7 +875,7 @@ export const bookmarksAppRouter = router({
     .output(zBookmarkSchema)
     .use(ensureBookmarkOwnership)
     .mutation(async ({ input, ctx }) => {
-      await ctx.db.transaction((tx) => {
+      await ctx.db.transaction(async (tx) => {
         let somethingChanged = false;
 
         // Update link-specific fields if any are provided
@@ -931,12 +907,11 @@ export const bookmarksAppRouter = router({
         }
 
         if (Object.keys(linkUpdateData).length > 0) {
-          const result = tx
+          const result = await tx
             .update(bookmarkLinks)
             .set(linkUpdateData)
-            .where(eq(bookmarkLinks.id, input.bookmarkId))
-            .run();
-          if (result.changes == 0) {
+            .where(eq(bookmarkLinks.id, input.bookmarkId));
+          if ((result.rowCount ?? 0) === 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
@@ -947,15 +922,14 @@ export const bookmarksAppRouter = router({
         }
 
         if (input.text) {
-          const result = tx
+          const result = await tx
             .update(bookmarkTexts)
             .set({
               text: input.text,
             })
-            .where(eq(bookmarkTexts.id, input.bookmarkId))
-            .run();
+            .where(eq(bookmarkTexts.id, input.bookmarkId));
 
-          if (result.changes == 0) {
+          if ((result.rowCount ?? 0) === 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
@@ -966,15 +940,14 @@ export const bookmarksAppRouter = router({
         }
 
         if (input.assetContent !== undefined) {
-          const result = tx
+          const result = await tx
             .update(bookmarkAssets)
             .set({
               content: input.assetContent,
             })
-            .where(and(eq(bookmarkAssets.id, input.bookmarkId)))
-            .run();
+            .where(and(eq(bookmarkAssets.id, input.bookmarkId)));
 
-          if (result.changes == 0) {
+          if ((result.rowCount ?? 0) === 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message:
@@ -1016,15 +989,15 @@ export const bookmarksAppRouter = router({
         }
 
         if (Object.keys(commonUpdateData).length > 1 || somethingChanged) {
-          tx.update(bookmarks)
+          await tx
+            .update(bookmarks)
             .set(commonUpdateData)
             .where(
               and(
                 eq(bookmarks.userId, ctx.user.id),
                 eq(bookmarks.id, input.bookmarkId),
               ),
-            )
-            .run();
+            );
         }
       });
 
@@ -1095,30 +1068,29 @@ export const bookmarksAppRouter = router({
     )
     .use(ensureBookmarkOwnership)
     .mutation(async ({ input, ctx }) => {
-      await ctx.db.transaction((tx) => {
-        const res = tx
+      await ctx.db.transaction(async (tx) => {
+        const res = await tx
           .update(bookmarkTexts)
           .set({
             text: input.text,
           })
           .where(and(eq(bookmarkTexts.id, input.bookmarkId)))
-          .returning()
-          .all();
+          .returning();
         if (res.length == 0) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Bookmark not found",
           });
         }
-        tx.update(bookmarks)
+        await tx
+          .update(bookmarks)
           .set({ modifiedAt: new Date() })
           .where(
             and(
               eq(bookmarks.id, input.bookmarkId),
               eq(bookmarks.userId, ctx.user.id),
             ),
-          )
-          .run();
+          );
       });
       await Promise.all([
         triggerSearchReindex(input.bookmarkId, {
@@ -1800,25 +1772,24 @@ export const bookmarksAppRouter = router({
       const allIdsToAttach = attachTagsWithNames.map((t) => t.id);
       const idsToRemove = detachTagsWithNames.map((t) => t.id);
 
-      const res = await ctx.db.transaction((tx) => {
+      const res = await ctx.db.transaction(async (tx) => {
         let numChanges = 0;
         // Detaches
         if (idsToRemove.length > 0) {
-          const res = tx
+          const res = await tx
             .delete(tagsOnBookmarks)
             .where(
               and(
                 eq(tagsOnBookmarks.bookmarkId, input.bookmarkId),
                 inArray(tagsOnBookmarks.tagId, idsToRemove),
               ),
-            )
-            .run();
-          numChanges += res.changes;
+            );
+          numChanges += res.rowCount ?? 0;
         }
 
         // Attach tags
         if (allIdsToAttach.length > 0) {
-          const res = tx
+          const res = await tx
             .insert(tagsOnBookmarks)
             .values(
               allIdsToAttach.map((i) => ({
@@ -1827,22 +1798,21 @@ export const bookmarksAppRouter = router({
                 attachedBy: tagIdToAttachedBy.get(i) ?? "human",
               })),
             )
-            .onConflictDoNothing()
-            .run();
-          numChanges += res.changes;
+            .onConflictDoNothing();
+          numChanges += res.rowCount ?? 0;
         }
 
         // Update bookmark modified timestamp
         if (numChanges > 0) {
-          tx.update(bookmarks)
+          await tx
+            .update(bookmarks)
             .set({ modifiedAt: new Date() })
             .where(
               and(
                 eq(bookmarks.id, input.bookmarkId),
                 eq(bookmarks.userId, ctx.user.id),
               ),
-            )
-            .run();
+            );
         }
 
         return {

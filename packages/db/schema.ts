@@ -1,55 +1,76 @@
 import type { AdapterAccount } from "@auth/core/adapters";
 import { createId } from "@paralleldrive/cuid2";
-import { relations, sql, SQL } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
-  AnySQLiteColumn,
-  foreignKey,
+  AnyPgColumn,
+  boolean,
+  customType,
   index,
   integer,
+  jsonb,
+  pgTable,
   primaryKey,
   real,
-  sqliteTable,
   text,
   unique,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 import type { ZApiKeyScope } from "@karakeep/shared/types/apiKeys";
 import { API_KEY_FULL_ACCESS_SCOPE } from "@karakeep/shared/types/apiKeys";
 import { BookmarkTypes } from "@karakeep/shared/types/bookmarks";
 import type { ZReaderViewReason } from "@karakeep/shared/types/bookmarks";
 
+export const pgTimestamp = customType<{
+  data: Date;
+  driverData: string | number;
+  input: Date | number;
+}>({
+  dataType() {
+    return "bigint";
+  },
+  toDriver(value: Date | number): string {
+    if (value instanceof Date) {
+      return value.getTime().toString();
+    }
+    return Math.floor(value).toString();
+  },
+  fromDriver(value: string | number): Date {
+    return new Date(Number(value));
+  },
+});
+
 function createdAtField(colName = "createdAt") {
-  return integer(colName, { mode: "timestamp" })
+  return pgTimestamp(colName)
     .notNull()
     .$defaultFn(() => new Date());
 }
 
 function createdAtMsField() {
-  return integer("createdAt", { mode: "timestamp_ms" })
+  return pgTimestamp("createdAt")
     .notNull()
     .$defaultFn(() => new Date());
 }
 
 function modifiedAtField() {
-  return integer("modifiedAt", { mode: "timestamp" })
+  return pgTimestamp("modifiedAt")
     .$defaultFn(() => new Date())
     .$onUpdate(() => new Date());
 }
 
 function modifiedAtMsField() {
-  return integer("modifiedAt", { mode: "timestamp_ms" })
+  return pgTimestamp("modifiedAt")
     .$defaultFn(() => new Date())
     .$onUpdate(() => new Date());
 }
 
-export const users = sqliteTable("user", {
+export const users = pgTable("user", {
   id: text("id")
     .notNull()
     .primaryKey()
     .$defaultFn(() => createId()),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
+  emailVerified: pgTimestamp("emailVerified"),
   image: text("image"),
   password: text("password"),
   salt: text("salt").notNull().default(""),
@@ -58,12 +79,7 @@ export const users = sqliteTable("user", {
   // Admin Only Settings
   bookmarkQuota: integer("bookmarkQuota"),
   storageQuota: integer("storageQuota"),
-  browserCrawlingEnabled: integer("browserCrawlingEnabled", {
-    mode: "boolean",
-  }),
-  // Admin-granted plan label (e.g. a collaborator name). While set, Stripe
-  // sync doesn't downgrade the user's entitlements; it's cleared when the
-  // user gets an active Stripe subscription.
+  browserCrawlingEnabled: boolean("browserCrawlingEnabled"),
   manualTierName: text("manualTierName"),
 
   // User Settings
@@ -80,9 +96,7 @@ export const users = sqliteTable("user", {
   timezone: text("timezone").default("UTC"),
 
   // Backup Settings
-  backupsEnabled: integer("backupsEnabled", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  backupsEnabled: boolean("backupsEnabled").notNull().default(false),
   backupsFrequency: text("backupsFrequency", {
     enum: ["daily", "weekly"],
   })
@@ -98,10 +112,8 @@ export const users = sqliteTable("user", {
   }),
 
   // AI Settings (nullable = opt-in, null means use server default)
-  autoTaggingEnabled: integer("autoTaggingEnabled", { mode: "boolean" }),
-  autoSummarizationEnabled: integer("autoSummarizationEnabled", {
-    mode: "boolean",
-  }),
+  autoTaggingEnabled: boolean("autoTaggingEnabled"),
+  autoSummarizationEnabled: boolean("autoSummarizationEnabled"),
   tagStyle: text("tagStyle", {
     enum: [
       "lowercase-hyphens",
@@ -113,11 +125,11 @@ export const users = sqliteTable("user", {
       "as-generated",
     ],
   }).default("titlecase-spaces"),
-  curatedTagIds: text("curatedTagIds", { mode: "json" }).$type<string[]>(),
+  curatedTagIds: jsonb("curatedTagIds").$type<string[]>(),
   inferredTagLang: text("inferredTagLang"),
 });
 
-export const accounts = sqliteTable(
+export const accounts = pgTable(
   "account",
   {
     userId: text("userId")
@@ -141,7 +153,7 @@ export const accounts = sqliteTable(
   ],
 );
 
-export const sessions = sqliteTable("session", {
+export const sessions = pgTable("session", {
   sessionToken: text("sessionToken")
     .notNull()
     .primaryKey()
@@ -149,20 +161,20 @@ export const sessions = sqliteTable("session", {
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+  expires: pgTimestamp("expires").notNull(),
 });
 
-export const verificationTokens = sqliteTable(
+export const verificationTokens = pgTable(
   "verificationToken",
   {
     identifier: text("identifier").notNull(),
     token: text("token").notNull(),
-    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+    expires: pgTimestamp("expires").notNull(),
   },
   (vt) => [primaryKey({ columns: [vt.identifier, vt.token] })],
 );
 
-export const passwordResetTokens = sqliteTable(
+export const passwordResetTokens = pgTable(
   "passwordResetToken",
   {
     id: text("id")
@@ -173,13 +185,13 @@ export const passwordResetTokens = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     token: text("token").notNull().unique(),
-    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+    expires: pgTimestamp("expires").notNull(),
     createdAt: createdAtField(),
   },
   (prt) => [index("passwordResetTokens_userId_idx").on(prt.userId)],
 );
 
-export const apiKeys = sqliteTable(
+export const apiKeys = pgTable(
   "apiKey",
   {
     id: text("id")
@@ -188,10 +200,10 @@ export const apiKeys = sqliteTable(
       .$defaultFn(() => createId()),
     name: text("name").notNull(),
     createdAt: createdAtField(),
-    lastUsedAt: integer("lastUsedAt", { mode: "timestamp" }),
+    lastUsedAt: pgTimestamp("lastUsedAt"),
     keyId: text("keyId").notNull().unique(),
     keyHash: text("keyHash").notNull(),
-    scopes: text("scopes", { mode: "json" })
+    scopes: jsonb("scopes")
       .$type<ZApiKeyScope[]>()
       .notNull()
       .$defaultFn(() => [API_KEY_FULL_ACCESS_SCOPE]),
@@ -202,29 +214,19 @@ export const apiKeys = sqliteTable(
   (ak) => [unique().on(ak.name, ak.userId)],
 );
 
-export const bookmarks = sqliteTable(
+export const bookmarks = pgTable(
   "bookmarks",
   {
     id: text("id")
       .notNull()
       .primaryKey()
       .$defaultFn(() => createId()),
-    // The `createdAt` field and the `createdAt` column intentionally don't
-    // match. Re-saving an existing bookmark bumps it back to the top of the
-    // list, so the timestamp everything sorts and filters on is now "when was
-    // this last saved" and lives in the `lastSavedAt` column. It keeps the
-    // `createdAt` field name because that's what the API has always exposed and
-    // what every query already orders by. The immutable "when did this row
-    // first appear" timestamp stays in the original `createdAt` column, and is
-    // exposed to clients as `firstCreatedAt`.
     dbCreatedAt: createdAtField(),
     createdAt: createdAtField("lastSavedAt"),
     modifiedAt: modifiedAtField(),
     title: text("title"),
-    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
-    favourited: integer("favourited", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    archived: boolean("archived").notNull().default(false),
+    favourited: boolean("favourited").notNull().default(false),
     userId: text("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -257,7 +259,6 @@ export const bookmarks = sqliteTable(
   },
   (b) => [
     index("bookmarks_lastSavedAt_idx").on(b.createdAt),
-    // Composite indexes for optimized pagination queries
     index("bookmarks_userId_lastSavedAt_id_idx").on(
       b.userId,
       b.createdAt,
@@ -278,7 +279,7 @@ export const bookmarks = sqliteTable(
   ],
 );
 
-export const bookmarkLinks = sqliteTable(
+export const bookmarkLinks = pgTable(
   "bookmarkLinks",
   {
     id: text("id")
@@ -287,14 +288,12 @@ export const bookmarkLinks = sqliteTable(
       .$defaultFn(() => createId())
       .references(() => bookmarks.id, { onDelete: "cascade" }),
     url: text("url").notNull(),
-
-    // Crawled info
     title: text("title"),
     description: text("description"),
     author: text("author"),
     publisher: text("publisher"),
-    datePublished: integer("datePublished", { mode: "timestamp" }),
-    dateModified: integer("dateModified", { mode: "timestamp" }),
+    datePublished: pgTimestamp("datePublished"),
+    dateModified: pgTimestamp("dateModified"),
     imageUrl: text("imageUrl"),
     favicon: text("favicon"),
     htmlContent: text("htmlContent"),
@@ -303,18 +302,14 @@ export const bookmarkLinks = sqliteTable(
       enum: ["readable", "not_readable", "uncertain", "unavailable"],
     }),
     readerViewScore: integer("readerViewScore"),
-    readerViewReasons: text("readerViewReasons", { mode: "json" }).$type<
-      ZReaderViewReason[]
-    >(),
+    readerViewReasons: jsonb("readerViewReasons").$type<ZReaderViewReason[]>(),
     readerViewClassifierVersion: integer("readerViewClassifierVersion"),
-    crawledAt: integer("crawledAt", { mode: "timestamp" }),
+    crawledAt: pgTimestamp("crawledAt"),
     crawlStatus: text("crawlStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
     crawlStatusCode: integer("crawlStatusCode").default(200),
-    // When the pre-crawl probe last extracted and stored this link's metadata.
-    // Lets crawl retries skip re-fetching it.
-    probeMetadataAt: integer("probeMetadataAt", { mode: "timestamp" }),
+    probeMetadataAt: pgTimestamp("probeMetadataAt"),
   },
   (bl) => [index("bookmarkLinks_url_idx").on(bl.url)],
 );
@@ -335,10 +330,9 @@ export const enum AssetTypes {
   UNKNOWN = "unknown",
 }
 
-export const assets = sqliteTable(
+export const assets = pgTable(
   "assets",
   {
-    // Asset ids don't have a default function as they are generated by the caller
     id: text("id").notNull().primaryKey(),
     assetType: text("assetType", {
       enum: [
@@ -367,7 +361,6 @@ export const assets = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
   },
-
   (tb) => [
     index("assets_bookmarkId_idx").on(tb.bookmarkId),
     index("assets_assetType_idx").on(tb.assetType),
@@ -375,7 +368,7 @@ export const assets = sqliteTable(
   ],
 );
 
-export const highlights = sqliteTable(
+export const highlights = pgTable(
   "highlights",
   {
     id: text("id")
@@ -407,7 +400,7 @@ export const highlights = sqliteTable(
   ],
 );
 
-export const userReadingProgress = sqliteTable(
+export const userReadingProgress = pgTable(
   "userReadingProgress",
   {
     id: text("id")
@@ -434,7 +427,7 @@ export const userReadingProgress = sqliteTable(
   ],
 );
 
-export const bookmarkTexts = sqliteTable("bookmarkTexts", {
+export const bookmarkTexts = pgTable("bookmarkTexts", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -444,7 +437,7 @@ export const bookmarkTexts = sqliteTable("bookmarkTexts", {
   sourceUrl: text("sourceUrl"),
 });
 
-export const bookmarkAssets = sqliteTable("bookmarkAssets", {
+export const bookmarkAssets = pgTable("bookmarkAssets", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -458,7 +451,7 @@ export const bookmarkAssets = sqliteTable("bookmarkAssets", {
   sourceUrl: text("sourceUrl"),
 });
 
-export const bookmarkTags = sqliteTable(
+export const bookmarkTags = pgTable(
   "bookmarkTags",
   {
     id: text("id")
@@ -466,14 +459,7 @@ export const bookmarkTags = sqliteTable(
       .primaryKey()
       .$defaultFn(() => createId()),
     name: text("name").notNull(),
-    normalizedName: text("normalizedName").generatedAlwaysAs(
-      (): SQL =>
-        // This function needs to be in sync with the tagNormalizer function in tagging.ts
-        sql`lower(replace(replace(replace(${bookmarkTags.name}, ' ', ''), '-', ''), '_', ''))`,
-      {
-        mode: "virtual",
-      },
-    ),
+    normalizedName: text("normalizedName"),
     createdAt: createdAtField(),
     userId: text("userId")
       .notNull()
@@ -487,7 +473,7 @@ export const bookmarkTags = sqliteTable(
   ],
 );
 
-export const tagsOnBookmarks = sqliteTable(
+export const tagsOnBookmarks = pgTable(
   "tagsOnBookmarks",
   {
     bookmarkId: text("bookmarkId")
@@ -497,19 +483,16 @@ export const tagsOnBookmarks = sqliteTable(
       .notNull()
       .references(() => bookmarkTags.id, { onDelete: "cascade" }),
 
-    attachedAt: integer("attachedAt", { mode: "timestamp" }).$defaultFn(
-      () => new Date(),
-    ),
+    attachedAt: pgTimestamp("attachedAt").$defaultFn(() => new Date()),
     attachedBy: text("attachedBy", { enum: ["ai", "human"] }).notNull(),
   },
   (tb) => [
     primaryKey({ columns: [tb.bookmarkId, tb.tagId] }),
-    // Composite index for tag-first queries (when filtering by tagId)
     index("tagsOnBookmarks_tagId_bookmarkId_idx").on(tb.tagId, tb.bookmarkId),
   ],
 );
 
-export const bookmarkLists = sqliteTable(
+export const bookmarkLists = pgTable(
   "bookmarkLists",
   {
     id: text("id")
@@ -524,15 +507,12 @@ export const bookmarkLists = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     type: text("type", { enum: ["manual", "smart"] }).notNull(),
-    // Only applicable for smart lists
     query: text("query"),
-    parentId: text("parentId").references(
-      (): AnySQLiteColumn => bookmarkLists.id,
-      { onDelete: "set null" },
-    ),
-    // Whoever have access to this token can read the content of this list
+    parentId: text("parentId").references((): AnyPgColumn => bookmarkLists.id, {
+      onDelete: "set null",
+    }),
     rssToken: text("rssToken"),
-    public: integer("public", { mode: "boolean" }).notNull().default(false),
+    public: boolean("public").notNull().default(false),
   },
   (bl) => [
     index("bookmarkLists_userId_idx").on(bl.userId),
@@ -540,7 +520,7 @@ export const bookmarkLists = sqliteTable(
   ],
 );
 
-export const bookmarksInLists = sqliteTable(
+export const bookmarksInLists = pgTable(
   "bookmarksInLists",
   {
     bookmarkId: text("bookmarkId")
@@ -549,11 +529,7 @@ export const bookmarksInLists = sqliteTable(
     listId: text("listId")
       .notNull()
       .references(() => bookmarkLists.id, { onDelete: "cascade" }),
-    addedAt: integer("addedAt", { mode: "timestamp" }).$defaultFn(
-      () => new Date(),
-    ),
-    // Tie the list's existence to the user's membership
-    // of this list.
+    addedAt: pgTimestamp("addedAt").$defaultFn(() => new Date()),
     listMembershipId: text("listMembershipId").references(
       () => listCollaborators.id,
       {
@@ -563,7 +539,6 @@ export const bookmarksInLists = sqliteTable(
   },
   (tb) => [
     primaryKey({ columns: [tb.bookmarkId, tb.listId] }),
-    // Composite index for list-first queries (when filtering by listId)
     index("bookmarksInLists_listId_bookmarkId_idx").on(
       tb.listId,
       tb.bookmarkId,
@@ -571,7 +546,7 @@ export const bookmarksInLists = sqliteTable(
   ],
 );
 
-export const listCollaborators = sqliteTable(
+export const listCollaborators = pgTable(
   "listCollaborators",
   {
     id: text("id")
@@ -597,7 +572,7 @@ export const listCollaborators = sqliteTable(
   ],
 );
 
-export const listInvitations = sqliteTable(
+export const listInvitations = pgTable(
   "listInvitations",
   {
     id: text("id")
@@ -614,7 +589,7 @@ export const listInvitations = sqliteTable(
     status: text("status", { enum: ["pending", "declined"] })
       .notNull()
       .default("pending"),
-    invitedAt: integer("invitedAt", { mode: "timestamp" })
+    invitedAt: pgTimestamp("invitedAt")
       .notNull()
       .$defaultFn(() => new Date()),
     invitedEmail: text("invitedEmail"),
@@ -630,7 +605,7 @@ export const listInvitations = sqliteTable(
   ],
 );
 
-export const customPrompts = sqliteTable(
+export const customPrompts = pgTable(
   "customPrompts",
   {
     id: text("id")
@@ -638,7 +613,7 @@ export const customPrompts = sqliteTable(
       .primaryKey()
       .$defaultFn(() => createId()),
     text: text("text").notNull(),
-    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+    enabled: boolean("enabled").notNull(),
     appliesTo: text("appliesTo", {
       enum: ["all_tagging", "text", "images", "summary"],
     }).notNull(),
@@ -650,7 +625,7 @@ export const customPrompts = sqliteTable(
   (bl) => [index("customPrompts_userId_idx").on(bl.userId)],
 );
 
-export const chatSessions = sqliteTable(
+export const chatSessions = pgTable(
   "chatSessions",
   {
     id: text("id")
@@ -670,7 +645,7 @@ export const chatSessions = sqliteTable(
   ],
 );
 
-export const chatMessages = sqliteTable(
+export const chatMessages = pgTable(
   "chatMessages",
   {
     id: text("id")
@@ -682,7 +657,7 @@ export const chatMessages = sqliteTable(
       .references(() => chatSessions.id, { onDelete: "cascade" }),
     role: text("role", { enum: ["user", "assistant", "toolResult"] }).notNull(),
     content: text("content").notNull(),
-    metadata: text("metadata", { mode: "json" }).$type<unknown>(),
+    metadata: jsonb("metadata").$type<unknown>(),
     createdAt: createdAtMsField(),
   },
   (cm) => [
@@ -691,7 +666,7 @@ export const chatMessages = sqliteTable(
   ],
 );
 
-export const rssFeedsTable = sqliteTable(
+export const rssFeedsTable = pgTable(
   "rssFeeds",
   {
     id: text("id")
@@ -700,15 +675,11 @@ export const rssFeedsTable = sqliteTable(
       .$defaultFn(() => createId()),
     name: text("name").notNull(),
     url: text("url").notNull(),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    importTags: integer("importTags", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    enabled: boolean("enabled").notNull().default(true),
+    importTags: boolean("importTags").notNull().default(false),
     createdAt: createdAtField(),
-    lastFetchedAt: integer("lastFetchedAt", { mode: "timestamp" }),
-    lastSuccessfulFetchAt: integer("lastSuccessfulFetchAt", {
-      mode: "timestamp",
-    }),
+    lastFetchedAt: pgTimestamp("lastFetchedAt"),
+    lastSuccessfulFetchAt: pgTimestamp("lastSuccessfulFetchAt"),
     lastFetchedStatus: text("lastFetchedStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
@@ -719,7 +690,7 @@ export const rssFeedsTable = sqliteTable(
   (bl) => [index("rssFeeds_userId_idx").on(bl.userId)],
 );
 
-export const webhooksTable = sqliteTable(
+export const webhooksTable = pgTable(
   "webhooks",
   {
     id: text("id")
@@ -731,7 +702,7 @@ export const webhooksTable = sqliteTable(
     userId: text("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    events: text("events", { mode: "json" })
+    events: jsonb("events")
       .notNull()
       .$type<("created" | "edited" | "crawled" | "ai tagged" | "deleted")[]>(),
     token: text("token"),
@@ -739,7 +710,7 @@ export const webhooksTable = sqliteTable(
   (bl) => [index("webhooks_userId_idx").on(bl.userId)],
 );
 
-export const rssFeedImportsTable = sqliteTable(
+export const rssFeedImportsTable = pgTable(
   "rssFeedImports",
   {
     id: text("id")
@@ -760,7 +731,6 @@ export const rssFeedImportsTable = sqliteTable(
     index("rssFeedImports_entryIdIdx_idx").on(bl.entryId),
     unique().on(bl.rssFeedId, bl.entryId),
     index("rssFeedImports_bookmarkId_idx").on(bl.bookmarkId),
-    // Composite index for RSS feed filter queries (when filtering by rssFeedId)
     index("rssFeedImports_rssFeedId_bookmarkId_idx").on(
       bl.rssFeedId,
       bl.bookmarkId,
@@ -768,7 +738,7 @@ export const rssFeedImportsTable = sqliteTable(
   ],
 );
 
-export const backupsTable = sqliteTable(
+export const backupsTable = pgTable(
   "backups",
   {
     id: text("id")
@@ -797,43 +767,33 @@ export const backupsTable = sqliteTable(
   ],
 );
 
-export const config = sqliteTable("config", {
+export const config = pgTable("config", {
   key: text("key").notNull().primaryKey(),
   value: text("value").notNull(),
 });
 
-export const ruleEngineRulesTable = sqliteTable(
+export const ruleEngineRulesTable = pgTable(
   "ruleEngineRules",
   {
     id: text("id")
       .notNull()
       .primaryKey()
       .$defaultFn(() => createId()),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    enabled: boolean("enabled").notNull().default(true),
     name: text("name").notNull(),
     description: text("description"),
     event: text("event").notNull(),
     condition: text("condition").notNull(),
 
-    // References
     userId: text("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     tagId: text("tagId"),
   },
-  (rl) => [
-    index("ruleEngine_userId_idx").on(rl.userId),
-
-    // Ensures correct ownership
-    foreignKey({
-      columns: [rl.userId, rl.tagId],
-      foreignColumns: [bookmarkTags.userId, bookmarkTags.id],
-      name: "ruleEngineRules_userId_tagId_fk",
-    }).onDelete("cascade"),
-  ],
+  (rl) => [index("ruleEngine_userId_idx").on(rl.userId)],
 );
 
-export const ruleEngineActionsTable = sqliteTable(
+export const ruleEngineActionsTable = pgTable(
   "ruleEngineActions",
   {
     id: text("id")
@@ -848,28 +808,16 @@ export const ruleEngineActionsTable = sqliteTable(
       .references(() => ruleEngineRulesTable.id, { onDelete: "cascade" }),
     action: text("action").notNull(),
 
-    // References
     listId: text("listId"),
     tagId: text("tagId"),
   },
   (rl) => [
     index("ruleEngineActions_userId_idx").on(rl.userId),
     index("ruleEngineActions_ruleId_idx").on(rl.ruleId),
-    // Ensures correct ownership
-    foreignKey({
-      columns: [rl.userId, rl.tagId],
-      foreignColumns: [bookmarkTags.userId, bookmarkTags.id],
-      name: "ruleEngineActions_userId_tagId_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [rl.userId, rl.listId],
-      foreignColumns: [bookmarkLists.userId, bookmarkLists.id],
-      name: "ruleEngineActions_userId_listId_fk",
-    }).onDelete("cascade"),
   ],
 );
 
-export const invites = sqliteTable("invites", {
+export const invites = pgTable("invites", {
   id: text("id")
     .notNull()
     .primaryKey()
@@ -877,13 +825,13 @@ export const invites = sqliteTable("invites", {
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
   createdAt: createdAtField(),
-  usedAt: integer("usedAt", { mode: "timestamp" }),
+  usedAt: pgTimestamp("usedAt"),
   invitedBy: text("invitedBy")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
 });
 
-export const subscriptions = sqliteTable(
+export const subscriptions = pgTable(
   "subscriptions",
   {
     id: text("id")
@@ -914,11 +862,9 @@ export const subscriptions = sqliteTable(
       .notNull()
       .default("free"),
     priceId: text("priceId"),
-    cancelAtPeriodEnd: integer("cancelAtPeriodEnd", {
-      mode: "boolean",
-    }).default(false),
-    startDate: integer("startDate", { mode: "timestamp" }),
-    endDate: integer("endDate", { mode: "timestamp" }),
+    cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false),
+    startDate: pgTimestamp("startDate"),
+    endDate: pgTimestamp("endDate"),
     createdAt: createdAtField(),
     modifiedAt: modifiedAtField(),
   },
@@ -928,7 +874,7 @@ export const subscriptions = sqliteTable(
   ],
 );
 
-export const importSessions = sqliteTable(
+export const importSessions = pgTable(
   "importSessions",
   {
     id: text("id")
@@ -956,8 +902,8 @@ export const importSessions = sqliteTable(
     })
       .notNull()
       .default("staging"),
-    lastProcessedAt: integer("lastProcessedAt", { mode: "timestamp" }),
-    completedAt: integer("completedAt", { mode: "timestamp" }),
+    lastProcessedAt: pgTimestamp("lastProcessedAt"),
+    completedAt: pgTimestamp("completedAt"),
     totalBookmarks: integer("totalBookmarks").notNull().default(0),
     completedBookmarks: integer("completedBookmarks").notNull().default(0),
     failedBookmarks: integer("failedBookmarks").notNull().default(0),
@@ -976,7 +922,7 @@ export const importSessions = sqliteTable(
   ],
 );
 
-export const importSessionBookmarks = sqliteTable(
+export const importSessionBookmarks = pgTable(
   "importSessionBookmarks",
   {
     id: text("id")
@@ -997,7 +943,7 @@ export const importSessionBookmarks = sqliteTable(
   ],
 );
 
-export const importStagingBookmarks = sqliteTable(
+export const importStagingBookmarks = pgTable(
   "importStagingBookmarks",
   {
     id: text("id")
@@ -1008,28 +954,23 @@ export const importStagingBookmarks = sqliteTable(
       .notNull()
       .references(() => importSessions.id, { onDelete: "cascade" }),
 
-    // Bookmark data to create
     type: text("type", { enum: ["link", "text", "asset"] }).notNull(),
     url: text("url"),
     title: text("title"),
     content: text("content"),
     note: text("note"),
-    tags: text("tags", { mode: "json" }).$type<string[]>(),
-    listIds: text("listIds", { mode: "json" }).$type<string[]>(),
-    sourceAddedAt: integer("sourceAddedAt", { mode: "timestamp" }),
-    archived: integer("archived", { mode: "boolean" }),
+    tags: jsonb("tags").$type<string[]>(),
+    listIds: jsonb("listIds").$type<string[]>(),
+    sourceAddedAt: pgTimestamp("sourceAddedAt"),
+    archived: boolean("archived"),
 
-    // Processing state
     status: text("status", {
       enum: ["pending", "processing", "completed", "failed"],
     })
       .notNull()
       .default("pending"),
-    processingStartedAt: integer("processingStartedAt", {
-      mode: "timestamp",
-    }),
+    processingStartedAt: pgTimestamp("processingStartedAt"),
 
-    // Result (for observability)
     result: text("result", {
       enum: ["accepted", "rejected", "skipped_duplicate"],
     }),
@@ -1039,7 +980,7 @@ export const importStagingBookmarks = sqliteTable(
     }),
 
     createdAt: createdAtField(),
-    completedAt: integer("completedAt", { mode: "timestamp" }),
+    completedAt: pgTimestamp("completedAt"),
   },
   (isb) => [
     index("importStaging_session_status_idx").on(
@@ -1311,27 +1252,16 @@ export const importSessionBookmarksRelations = relations(
   }),
 );
 
-export const backupsRelations = relations(backupsTable, ({ one }) => ({
-  user: one(users, {
-    fields: [backupsTable.userId],
-    references: [users.id],
-  }),
-  asset: one(assets, {
-    fields: [backupsTable.assetId],
-    references: [assets.id],
-  }),
-}));
-
-export const userReadingProgressRelations = relations(
-  userReadingProgress,
+export const importStagingBookmarksRelations = relations(
+  importStagingBookmarks,
   ({ one }) => ({
-    bookmark: one(bookmarks, {
-      fields: [userReadingProgress.bookmarkId],
-      references: [bookmarks.id],
+    importSession: one(importSessions, {
+      fields: [importStagingBookmarks.importSessionId],
+      references: [importSessions.id],
     }),
-    user: one(users, {
-      fields: [userReadingProgress.userId],
-      references: [users.id],
+    resultBookmark: one(bookmarks, {
+      fields: [importStagingBookmarks.resultBookmarkId],
+      references: [bookmarks.id],
     }),
   }),
 );

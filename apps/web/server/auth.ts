@@ -90,11 +90,16 @@ function normalizeSafeDisplayName(name: string | null | undefined): string {
 }
 
 const CustomProvider = (): Adapter => {
-  const adapter = DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
+  // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+  const adapter = DrizzleAdapter(db as any, {
+    // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+    usersTable: users as any,
+    // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+    accountsTable: accounts as any,
+    // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+    sessionsTable: sessions as any,
+    // oxlint-disable-next-line @typescript-eslint/no-explicit-any
+    verificationTokensTable: verificationTokens as any,
   });
 
   const assertWritesAllowed = () => {

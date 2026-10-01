@@ -17,11 +17,7 @@ export class StorageQuotaError extends Error {
   }
 }
 
-// TODO: Change the API of this class to either return a boolean
-// or throw an exception on lack of quota because now, it's inconsistent.
 export class QuotaService {
-  // TODO: Use quota approval tokens for bookmark creation when
-  // bookmark creation logic is in the model.
   static async canCreateBookmark(db: DB, userId: string) {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -46,25 +42,22 @@ export class QuotaService {
     } as const;
   }
 
-  static canCreateBookmarkInTransaction(
+  static async canCreateBookmarkInTransaction(
     tx: KarakeepDBTransaction,
     userId: string,
   ) {
-    const user = tx.query.users
-      .findFirst({
-        where: eq(users.id, userId),
-        columns: {
-          bookmarkQuota: true,
-        },
-      })
-      .sync();
+    const user = await tx.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        bookmarkQuota: true,
+      },
+    });
 
     if (user?.bookmarkQuota !== null && user?.bookmarkQuota !== undefined) {
-      const currentBookmarkCount = tx
+      const currentBookmarkCount = await tx
         .select({ count: count() })
         .from(bookmarks)
-        .where(eq(bookmarks.userId, userId))
-        .all();
+        .where(eq(bookmarks.userId, userId));
 
       return this.bookmarkQuotaResult(
         user.bookmarkQuota,
@@ -104,7 +97,6 @@ export class QuotaService {
     });
 
     if (user?.storageQuota === null || user?.storageQuota === undefined) {
-      // No quota limit - approve the request
       return QuotaApproved._create(userId, requestedSize);
     }
 
@@ -118,7 +110,6 @@ export class QuotaService {
       );
     }
 
-    // Quota check passed - return approval token
     return QuotaApproved._create(userId, requestedSize);
   }
 

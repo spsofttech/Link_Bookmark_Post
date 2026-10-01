@@ -1,19 +1,22 @@
-import Database from "better-sqlite3";
 import { ExtractTablesWithRelations } from "drizzle-orm";
-import { SQLiteTransaction } from "drizzle-orm/sqlite-core";
-
+import { PgQueryResultHKT, PgTransaction } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 
-export { db, sqlite } from "./drizzle";
+export { db, pool } from "./drizzle";
 export type { DB } from "./drizzle";
 export * as schema from "./schema";
 export * from "./supabase";
-export { SqliteError } from "better-sqlite3";
 
-// This is exported here to avoid leaking better-sqlite types outside of this package.
-export type KarakeepDBTransaction = SQLiteTransaction<
-  "sync",
-  Database.RunResult,
+export class SqliteError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export type KarakeepDBTransaction = PgTransaction<
+  PgQueryResultHKT,
   typeof schema,
   ExtractTablesWithRelations<typeof schema>
 >;

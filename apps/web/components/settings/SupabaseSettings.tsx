@@ -21,11 +21,7 @@ import {
 import { SettingsSection } from "./SettingsPage";
 
 export default function SupabaseSettings() {
-  const {
-    data: statusData,
-    isLoading,
-    refetch,
-  } = useSupabaseStatus();
+  const { data: statusData, isLoading, refetch } = useSupabaseStatus();
   const isEnabled = statusData?.enabled ?? true;
   const isConnected = statusData?.connected ?? false;
   const supabaseUrl = statusData?.url ?? "";
@@ -58,7 +54,7 @@ export default function SupabaseSettings() {
         refetch();
       } else {
         toast({
-          description: res.reason || res.error || "Supabase sync completed.",
+          description: res.reason || "Supabase sync completed.",
           variant: "destructive",
         });
       }
@@ -71,9 +67,7 @@ export default function SupabaseSettings() {
     },
   });
 
-  const projectId = supabaseUrl.match(
-    /https:\/\/([^.]+)\.supabase\.co/,
-  )?.[1];
+  const projectId = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
   const sqlEditorUrl = projectId
     ? `https://supabase.com/dashboard/project/${projectId}/sql`
     : "https://supabase.com/dashboard";

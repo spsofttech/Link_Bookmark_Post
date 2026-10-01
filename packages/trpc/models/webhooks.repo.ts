@@ -55,7 +55,7 @@ export class WebhooksRepo {
     const res = await this.db
       .delete(webhooksTable)
       .where(eq(webhooksTable.id, id));
-    return res.changes > 0;
+    return (res.rowCount ?? 0) > 0;
   }
 
   async update(

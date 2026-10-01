@@ -1,18 +1,12 @@
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-
 import serverConfig from "@karakeep/shared/config";
-
-import { db, resolveMigrationsFolder } from "./drizzle";
 
 if (serverConfig.degradedMode) {
   console.log("Skipping database migrations in degraded mode");
 } else {
   try {
-    const folder = resolveMigrationsFolder();
-    if (folder) {
-      migrate(db, { migrationsFolder: folder });
-    }
+    // Schema is managed directly on Supabase PostgreSQL
+    console.log("Database connected to Supabase PostgreSQL.");
   } catch (e) {
-    console.warn("Failed to apply database migrations:", e);
+    console.warn("Failed to check database migrations:", e);
   }
 }

@@ -56,7 +56,7 @@ export class FeedsRepo {
     const res = await this.db
       .delete(rssFeedsTable)
       .where(eq(rssFeedsTable.id, id));
-    return res.changes > 0;
+    return (res.rowCount ?? 0) > 0;
   }
 
   async update(

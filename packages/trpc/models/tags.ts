@@ -95,8 +95,14 @@ export class Tag {
         .returning();
 
       return new Tag(ctx, result);
-    } catch (e) {
-      if (e instanceof SqliteError && e.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      if (
+        (e instanceof SqliteError && e.code === "SQLITE_CONSTRAINT_UNIQUE") ||
+        err?.code === "23505" ||
+        err?.message?.includes("unique constraint") ||
+        err?.message?.includes("duplicate key")
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Tag name already exists for this user.",
@@ -220,7 +226,7 @@ export class Tag {
           ),
         ),
       );
-    return res.changes;
+    return res.rowCount ?? 0;
   }
 
   static async merge(
@@ -272,15 +278,14 @@ export class Tag {
     }
 
     const { deletedTags, affectedBookmarks } = await ctx.db.transaction(
-      (trx) => {
-        const unlinked = trx
+      async (trx) => {
+        const unlinked = await trx
           .delete(tagsOnBookmarks)
           .where(and(inArray(tagsOnBookmarks.tagId, input.fromTagIds)))
-          .returning()
-          .all();
+          .returning();
 
         if (unlinked.length > 0) {
-          trx
+          await trx
             .insert(tagsOnBookmarks)
             .values(
               unlinked.map((u) => ({
@@ -288,11 +293,10 @@ export class Tag {
                 tagId: input.intoTagId,
               })),
             )
-            .onConflictDoNothing()
-            .run();
+            .onConflictDoNothing();
         }
 
-        const deletedTags = trx
+        const deletedTags = await trx
           .delete(bookmarkTags)
           .where(
             and(
@@ -300,8 +304,7 @@ export class Tag {
               eq(bookmarkTags.userId, ctx.user.id),
             ),
           )
-          .returning({ id: bookmarkTags.id })
-          .all();
+          .returning({ id: bookmarkTags.id });
 
         return {
           deletedTags,
@@ -345,7 +348,7 @@ export class Tag {
         ),
       );
 
-    if (res.changes === 0) {
+    if ((res.rowCount ?? 0) === 0) {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
 

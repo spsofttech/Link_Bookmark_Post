@@ -1090,7 +1090,7 @@ export class Bookmark extends BareBookmark {
         groupId: this.ctx.user.id,
       },
     );
-    if (deleted.changes > 0) {
+    if ((deleted.rowCount ?? 0) > 0) {
       await this.cleanupAssets();
     }
   }

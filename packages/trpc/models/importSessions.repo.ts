@@ -66,7 +66,7 @@ export class ImportSessionsRepo {
     const result = await this.db
       .delete(importSessions)
       .where(eq(importSessions.id, id));
-    return result.changes > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async insertStagingBookmarks(
@@ -114,69 +114,64 @@ export class ImportSessionsRepo {
     // taking a WAL snapshot that another connection could invalidate.
     let archivedCount = 0;
     for (const session of sessions) {
-      const archived = await this.db.transaction(
-        (tx) => {
-          const statusCounts = tx
-            .select({
-              status: importStagingBookmarks.status,
-              count: count(),
-            })
-            .from(importStagingBookmarks)
-            .where(eq(importStagingBookmarks.importSessionId, session.id))
-            .groupBy(importStagingBookmarks.status)
-            .all();
+      const archived = await this.db.transaction(async (tx) => {
+        const statusCounts = await tx
+          .select({
+            status: importStagingBookmarks.status,
+            count: count(),
+          })
+          .from(importStagingBookmarks)
+          .where(eq(importStagingBookmarks.importSessionId, session.id))
+          .groupBy(importStagingBookmarks.status);
 
-          const stats = {
-            totalBookmarks: 0,
-            completedBookmarks: 0,
-            failedBookmarks: 0,
-            pendingBookmarks: 0,
-            processingBookmarks: 0,
-          };
+        const stats = {
+          totalBookmarks: 0,
+          completedBookmarks: 0,
+          failedBookmarks: 0,
+          pendingBookmarks: 0,
+          processingBookmarks: 0,
+        };
 
-          for (const { status, count: itemCount } of statusCounts) {
-            stats.totalBookmarks += itemCount;
-            switch (status) {
-              case "pending":
-                stats.pendingBookmarks += itemCount;
-                break;
-              case "processing":
-                stats.processingBookmarks += itemCount;
-                break;
-              case "completed":
-                stats.completedBookmarks += itemCount;
-                break;
-              case "failed":
-                stats.failedBookmarks += itemCount;
-                break;
-            }
+        for (const { status, count: itemCount } of statusCounts) {
+          stats.totalBookmarks += itemCount;
+          switch (status) {
+            case "pending":
+              stats.pendingBookmarks += itemCount;
+              break;
+            case "processing":
+              stats.processingBookmarks += itemCount;
+              break;
+            case "completed":
+              stats.completedBookmarks += itemCount;
+              break;
+            case "failed":
+              stats.failedBookmarks += itemCount;
+              break;
           }
+        }
 
-          const result = tx
-            .update(importSessions)
-            .set({ status: "archived", ...stats })
-            .where(
-              and(
-                eq(importSessions.id, session.id),
-                eq(importSessions.status, "completed"),
-              ),
-            )
-            .run();
+        const result = await tx
+          .update(importSessions)
+          .set({ status: "archived", ...stats })
+          .where(
+            and(
+              eq(importSessions.id, session.id),
+              eq(importSessions.status, "completed"),
+            ),
+          );
 
-          if (result.changes === 0) {
-            return false;
-          }
+        if ((result.rowCount ?? 0) === 0) {
+          return false;
+        }
 
-          tx.delete(importStagingBookmarks)
-            .where(eq(importStagingBookmarks.importSessionId, session.id))
-            .run();
-          tx.delete(importSessionBookmarks)
-            .where(eq(importSessionBookmarks.importSessionId, session.id))
-            .run();
-          return true;
-        },
-        { behavior: "immediate" },
-      );
+        await tx
+          .delete(importStagingBookmarks)
+          .where(eq(importStagingBookmarks.importSessionId, session.id));
+        await tx
+          .delete(importSessionBookmarks)
+          .where(eq(importSessionBookmarks.importSessionId, session.id));
+        return true;
+      });
 
       if (archived) {
         archivedCount++;

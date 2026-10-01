@@ -81,7 +81,9 @@ export default function CredentialsForm() {
           <KarakeepLogo height={64} />
           <div className="flex items-center gap-3">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="text-lg font-semibold text-foreground">Signing you in...</span>
+            <span className="text-lg font-semibold text-foreground">
+              Signing you in...
+            </span>
           </div>
           <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
             <div className="h-full animate-[progress_1.5s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
@@ -112,7 +114,6 @@ export default function CredentialsForm() {
             setIsRedirecting(true);
             router.replace("/");
           })}
-
           className="space-y-4"
         >
           {signinError && (

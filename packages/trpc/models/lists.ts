@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, count, eq, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { z } from "zod";
 
@@ -502,26 +502,14 @@ export abstract class List {
     }
   }
 
-  protected cleanupRulesAfterListDeletion(tx: KarakeepDBTransaction) {
-    const rules = tx
+  protected async cleanupRulesAfterListDeletion(tx: KarakeepDBTransaction) {
+    const rules = await tx
       .select({
         id: ruleEngineRulesTable.id,
         event: ruleEngineRulesTable.event,
       })
       .from(ruleEngineRulesTable)
-      .where(
-        and(
-          eq(ruleEngineRulesTable.userId, this.ctx.user.id),
-          sql`json_valid(${ruleEngineRulesTable.event})`,
-          sql`json_extract(${ruleEngineRulesTable.event}, '$.type') IN ('addedToList', 'removedFromList')`,
-          sql`EXISTS (
-            SELECT 1
-            FROM json_each(json_extract(${ruleEngineRulesTable.event}, '$.listIds'))
-            WHERE value = ${this.list.id}
-          )`,
-        ),
-      )
-      .all();
+      .where(eq(ruleEngineRulesTable.userId, this.ctx.user.id));
     const rulesToDelete: string[] = [];
     const rulesToUpdate: { id: string; event: string }[] = [];
 
@@ -566,37 +554,36 @@ export abstract class List {
     }
 
     if (rulesToDelete.length > 0) {
-      tx.delete(ruleEngineRulesTable)
-        .where(inArray(ruleEngineRulesTable.id, rulesToDelete))
-        .run();
+      await tx
+        .delete(ruleEngineRulesTable)
+        .where(inArray(ruleEngineRulesTable.id, rulesToDelete));
     }
 
     if (rulesToUpdate.length > 0) {
       for (const { id, event } of rulesToUpdate) {
-        tx.update(ruleEngineRulesTable)
+        await tx
+          .update(ruleEngineRulesTable)
           .set({ event })
-          .where(eq(ruleEngineRulesTable.id, id))
-          .run();
+          .where(eq(ruleEngineRulesTable.id, id));
       }
     }
   }
 
   async delete() {
     this.ensureCanManage();
-    await this.ctx.db.transaction((tx) => {
-      const res = tx
+    await this.ctx.db.transaction(async (tx) => {
+      const res = await tx
         .delete(bookmarkLists)
         .where(
           and(
             eq(bookmarkLists.id, this.list.id),
             eq(bookmarkLists.userId, this.ctx.user.id),
           ),
-        )
-        .run();
-      if (res.changes == 0) {
+        );
+      if ((res.rowCount ?? 0) === 0) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      this.cleanupRulesAfterListDeletion(tx);
+      await this.cleanupRulesAfterListDeletion(tx);
     });
   }
 
@@ -759,7 +746,7 @@ export abstract class List {
         ),
       );
 
-    if (result.changes === 0) {
+    if ((result.rowCount ?? 0) === 0) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Collaborator not found",
@@ -790,7 +777,7 @@ export abstract class List {
         ),
       );
 
-    if (result.changes === 0) {
+    if ((result.rowCount ?? 0) === 0) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Collaborator not found",
@@ -817,7 +804,7 @@ export abstract class List {
         ),
       );
 
-    if (result.changes === 0) {
+    if ((result.rowCount ?? 0) === 0) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Collaborator not found",
@@ -1082,12 +1069,18 @@ export class ManualList extends List {
           this.ctx.db,
         );
       }
-    } catch (e) {
-      if (e instanceof SqliteError) {
-        if (e.code == "SQLITE_CONSTRAINT_PRIMARYKEY") {
-          // this is fine, it just means the bookmark is already in the list
-          return;
-        }
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      if (
+        (e instanceof SqliteError &&
+          e.code === "SQLITE_CONSTRAINT_PRIMARYKEY") ||
+        err?.code === "23505" ||
+        err?.message?.includes("duplicate key") ||
+        err?.message?.includes("unique constraint") ||
+        err?.message?.includes("primary key")
+      ) {
+        // this is fine, it just means the bookmark is already in the list
+        return;
       }
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -1108,7 +1101,7 @@ export class ManualList extends List {
           eq(bookmarksInLists.bookmarkId, bookmarkId),
         ),
       );
-    if (deleted.changes == 0) {
+    if ((deleted.rowCount ?? 0) == 0) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Bookmark ${bookmarkId} is already not in list ${this.list.id}`,
@@ -1159,22 +1152,22 @@ export class ManualList extends List {
 
     const bookmarkIds = await this.getBookmarkIds();
 
-    await this.ctx.db.transaction((tx) => {
-      tx.insert(bookmarksInLists)
+    await this.ctx.db.transaction(async (tx) => {
+      await tx
+        .insert(bookmarksInLists)
         .values(
           bookmarkIds.map((id) => ({
             bookmarkId: id,
             listId: targetList.id,
           })),
         )
-        .onConflictDoNothing()
-        .run();
+        .onConflictDoNothing();
 
       if (deleteSourceAfterMerge) {
-        tx.delete(bookmarkLists)
-          .where(eq(bookmarkLists.id, this.list.id))
-          .run();
-        this.cleanupRulesAfterListDeletion(tx);
+        await tx
+          .delete(bookmarkLists)
+          .where(eq(bookmarkLists.id, this.list.id));
+        await this.cleanupRulesAfterListDeletion(tx);
       }
     });
   }

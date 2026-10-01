@@ -8,7 +8,6 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
-import Database from "better-sqlite3";
 import dotenv from "dotenv";
 
 // Load env
@@ -110,7 +109,7 @@ async function runSchemaSQL() {
 // ─── Step 2: Verify tables exist ─────────────────────────────────────────────
 
 async function checkTables() {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("bookmarks")
     .select("id", { count: "exact", head: true });
 

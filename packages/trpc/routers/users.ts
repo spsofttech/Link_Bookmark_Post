@@ -1,7 +1,6 @@
 import {
   isSupabaseSyncEnabled,
   setSupabaseSyncEnabled,
-  sqlite,
   syncAllToSupabase,
   testSupabaseConnection,
 } from "@karakeep/db";
@@ -170,11 +169,20 @@ export const usersAppRouter = router({
       const user = await User.fromCtx(ctx);
       await user.deleteAccount(input.password);
     }),
-  clearAllData: usersProcedure.mutation(async ({ ctx }) => {
-    const user = await User.fromCtx(ctx);
-    await user.clearAllData();
-    return { success: true };
-  }),
+  clearAllData: usersProcedure
+    .input(z.object({ confirmPhrase: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.confirmPhrase !== "delete my data") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Confirmation phrase incorrect. Data was NOT deleted for your safety.",
+        });
+      }
+      const user = await User.fromCtx(ctx);
+      await user.clearAllData();
+      return { success: true };
+    }),
   getSupabaseStatus: usersProcedure.query(async () => {
     const connection = await testSupabaseConnection();
     return {
@@ -192,7 +200,7 @@ export const usersAppRouter = router({
       return { enabled: updated };
     }),
   syncToSupabaseNow: usersProcedure.mutation(async () => {
-    const res = await syncAllToSupabase(sqlite);
+    const res = await syncAllToSupabase();
     return res;
   }),
   testSupabaseConnection: usersProcedure.query(async () => {

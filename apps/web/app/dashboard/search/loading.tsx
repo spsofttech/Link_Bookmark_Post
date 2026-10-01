@@ -8,7 +8,10 @@ export default function SearchLoading() {
       {/* Results skeleton */}
       <div className="space-y-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex gap-3 rounded-lg border border-border bg-card p-4">
+          <div
+            key={i}
+            className="flex gap-3 rounded-lg border border-border bg-card p-4"
+          >
             <Skeleton className="h-14 w-14 shrink-0 rounded-md" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-4 w-3/4" />

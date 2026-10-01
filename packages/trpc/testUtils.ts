@@ -23,7 +23,7 @@ export function getTestQueueMocks() {
 }
 
 export function getTestDB() {
-  return getInMemoryDB(true);
+  return getInMemoryDB();
 }
 
 export type TestDB = ReturnType<typeof getTestDB>;

@@ -25,7 +25,7 @@ let mockCtx: AuthedContext;
 let testUserId: string;
 
 beforeEach(async () => {
-  const db = getInMemoryDB(true);
+  const db = getInMemoryDB();
   testUserId = "test-user";
 
   await db.insert(users).values([

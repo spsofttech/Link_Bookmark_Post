@@ -12,7 +12,10 @@ export default function DashboardLoading() {
         </div>
         <div className="space-y-1">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2">
+            <div
+              key={i}
+              className="flex items-center gap-3 rounded-md px-3 py-2"
+            >
               <Skeleton className="h-4 w-4 rounded" />
               <Skeleton className="h-4 w-24" />
             </div>
@@ -22,7 +25,10 @@ export default function DashboardLoading() {
           <Skeleton className="mb-3 h-3 w-16 px-3" />
           <div className="space-y-1">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2">
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-md px-3 py-2"
+              >
                 <Skeleton className="h-4 w-4 rounded" />
                 <Skeleton className={`h-4 w-${[20, 28, 16, 24][i % 4]}`} />
               </div>
@@ -45,7 +51,10 @@ export default function DashboardLoading() {
         <div className="flex-1 overflow-auto p-4">
           <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <div
+                key={i}
+                className="space-y-3 rounded-lg border border-border bg-card p-4"
+              >
                 <Skeleton className="h-36 w-full rounded-md" />
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-3 w-1/2" />

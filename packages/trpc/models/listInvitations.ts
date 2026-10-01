@@ -119,20 +119,20 @@ export class ListInvitation {
       });
     }
 
-    await this.ctx.db.transaction((tx) => {
-      tx.delete(listInvitations)
-        .where(eq(listInvitations.id, this.invitation.id))
-        .run();
+    await this.ctx.db.transaction(async (tx) => {
+      await tx
+        .delete(listInvitations)
+        .where(eq(listInvitations.id, this.invitation.id));
 
-      tx.insert(listCollaborators)
+      await tx
+        .insert(listCollaborators)
         .values({
           listId: this.invitation.listId,
           userId: this.invitation.userId,
           role: this.invitation.role,
           addedBy: this.invitation.invitedBy,
         })
-        .onConflictDoNothing()
-        .run();
+        .onConflictDoNothing();
     });
   }
 

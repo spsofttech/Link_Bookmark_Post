@@ -205,8 +205,8 @@ async function runWorker(job: DequeuedJob<ZVideoRequest>) {
       quotaApproved,
     });
 
-    await db.transaction((txn) => {
-      updateAsset(
+    await db.transaction(async (txn) => {
+      await updateAsset(
         oldVideoAssetId,
         {
           id: videoAssetId,

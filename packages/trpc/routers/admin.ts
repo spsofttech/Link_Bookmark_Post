@@ -563,7 +563,7 @@ export const adminAppRouter = router({
         .set(updateData)
         .where(eq(users.id, input.userId));
 
-      if (!result.changes) {
+      if (!result.rowCount) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "User not found",
@@ -586,7 +586,7 @@ export const adminAppRouter = router({
         .set({ password: hashedPassword, salt: newSalt })
         .where(eq(users.id, input.userId));
 
-      if (result.changes == 0) {
+      if ((result.rowCount ?? 0) == 0) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "User not found",
