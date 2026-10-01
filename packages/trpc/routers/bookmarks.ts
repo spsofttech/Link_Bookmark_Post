@@ -80,6 +80,8 @@ import {
 import type { ZBookmarkTags } from "@karakeep/shared/types/tags";
 import { ANCHOR_TEXT_MAX_LENGTH } from "@karakeep/shared/utils/reading-progress-dom";
 import { normalizeTagName } from "@karakeep/shared/utils/tag";
+import { extractTitleAndDescription } from "@karakeep/shared/utils/metadataExtractor";
+import { processAndApplyAutoCategoryAndMetadata } from "../lib/autoCategoryHelper";
 import { getVectorStoreClient } from "@karakeep/shared/vectorStore";
 import type { VectorFilterQuery } from "@karakeep/shared/vectorStore";
 import { bookmarkCreationCounter } from "../stats";
@@ -531,10 +533,18 @@ export const bookmarksAppRouter = router({
               skippedCount++;
             } else {
               const createdAt = item.sourceAddedAt ?? new Date();
-              const cleanTitle = (item.title || finalUrl || "Untitled")
-                .trim()
-                .split("\n")[0]
-                .slice(0, 200);
+              const extractedMeta = extractTitleAndDescription({
+                url: finalUrl,
+                title: item.title,
+                description: item.description,
+                content: item.content,
+                note: item.note,
+              });
+              const cleanTitle = extractedMeta.title.slice(0, 200);
+
+              if (!item.tags.includes(extractedMeta.category)) {
+                item.tags.push(extractedMeta.category);
+              }
 
               const [createdBookmark] = await tx
                 .insert(bookmarks)
@@ -566,7 +576,11 @@ export const bookmarksAppRouter = router({
                     id: createdBookmark.id,
                     url: finalUrl,
                     title: cleanTitle,
-                    description: item.description || item.note || undefined,
+                    description:
+                      extractedMeta.description ||
+                      item.description ||
+                      item.note ||
+                      undefined,
                     imageUrl: item.imageUrl || undefined,
                     crawlStatus: "pending",
                     crawlStatusCode: 200,
@@ -997,6 +1011,25 @@ export const bookmarksAppRouter = router({
           ...bookmark,
         };
       });
+
+      try {
+        await processAndApplyAutoCategoryAndMetadata(
+          ctx.db,
+          ctx.user.id,
+          bookmark.id,
+          {
+            url: input.type === BookmarkTypes.LINK ? input.url : null,
+            title: input.title,
+            description: input.summary || input.note,
+            content: input.type === BookmarkTypes.TEXT ? input.text : null,
+            note: input.note,
+          },
+        );
+      } catch (err) {
+        logger.warn(
+          `Failed auto-categorization for bookmark ${bookmark.id}: ${err}`,
+        );
+      }
 
       bookmarkCreationCounter.labels(input.source ?? "unknown").inc();
       addLogFields<"bookmark.create">({

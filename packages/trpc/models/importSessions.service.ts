@@ -7,6 +7,7 @@ import {
   zCreateImportSessionRequestSchema,
   ZImportSessionWithStats,
 } from "@karakeep/shared/types/importSessions";
+import { extractTitleAndDescription } from "@karakeep/shared/utils/metadataExtractor";
 
 import type { Actor, Authorized } from "../lib/actor";
 import { actorUserId, assertOwnership, authorize } from "../lib/actor";
@@ -104,19 +105,34 @@ export class ImportSessionsService {
     }
 
     await this.repo.insertStagingBookmarks(
-      validBookmarks.map((bookmark) => ({
-        importSessionId: session.id,
-        type: bookmark.type,
-        url: bookmark.url,
-        title: bookmark.title,
-        content: bookmark.content,
-        note: bookmark.note,
-        tags: bookmark.tags,
-        listIds: bookmark.listIds,
-        sourceAddedAt: bookmark.sourceAddedAt,
-        archived: bookmark.archived,
-        status: "pending" as const,
-      })),
+      validBookmarks.map((bookmark) => {
+        const meta = extractTitleAndDescription({
+          url: bookmark.url,
+          title: bookmark.title,
+          description: undefined,
+          content: bookmark.content,
+          note: bookmark.note,
+        });
+
+        const tags = [...bookmark.tags];
+        if (!tags.includes(meta.category)) {
+          tags.push(meta.category);
+        }
+
+        return {
+          importSessionId: session.id,
+          type: bookmark.type,
+          url: bookmark.url,
+          title: meta.title,
+          content: bookmark.content || meta.description,
+          note: bookmark.note,
+          tags,
+          listIds: bookmark.listIds,
+          sourceAddedAt: bookmark.sourceAddedAt,
+          archived: bookmark.archived,
+          status: "pending" as const,
+        };
+      }),
     );
   }
 

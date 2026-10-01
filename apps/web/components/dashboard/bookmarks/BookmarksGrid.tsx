@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import KeyboardShortcutsDialog from "@/components/dashboard/KeyboardShortcutsDialog";
 import NoBookmarksBanner from "@/components/dashboard/bookmarks/NoBookmarksBanner";
 import { ActionButton } from "@/components/ui/action-button";
@@ -11,7 +11,6 @@ import { useTranslation } from "@/lib/i18n/client";
 import { useInBookmarkGridStore } from "@/lib/store/useInBookmarkGridStore";
 import { useKeyboardNavigationStore } from "@/lib/store/useKeyboardNavigationStore";
 import {
-  bookmarkLayoutSwitch,
   useBookmarkLayout,
   useGridColumns,
 } from "@/lib/userLocalSettings/bookmarksLayout";
@@ -20,26 +19,14 @@ import tailwindConfig from "@/tailwind.config";
 import { Slot } from "@radix-ui/react-slot";
 import { ErrorBoundary } from "react-error-boundary";
 import { useInView } from "react-intersection-observer";
-import ReactMasonry from "react-masonry-css";
 import resolveConfig from "tailwindcss/resolveConfig";
-
-// oxlint-disable-next-line @typescript-eslint/no-explicit-any
-const MasonryComponent = (ReactMasonry as any)?.default || ReactMasonry;
-const SafeMasonry =
-  typeof MasonryComponent === "function" ||
-  (typeof MasonryComponent === "object" && MasonryComponent !== null)
-    ? MasonryComponent
-    : // oxlint-disable-next-line @typescript-eslint/no-explicit-any
-      ({ children, className }: any) => (
-        <div className={className}>{children}</div>
-      );
 
 import type { ZBookmark } from "@karakeep/shared/types/bookmarks";
 import { useBookmarkListContext } from "@karakeep/shared-react/hooks/bookmark-list-context";
 
 import BookmarkCard from "./BookmarkCard";
-import EditorCard from "./EditorCard";
 import UnknownCard from "./UnknownCard";
+import BookmarksDirectoryView from "../directory/BookmarksDirectoryView";
 
 function StyledBookmarkCard({
   children,
@@ -62,7 +49,7 @@ function StyledBookmarkCard({
   );
 }
 
-const BookmarkGridItem = memo(function BookmarkGridItem({
+export const BookmarkGridItem = memo(function BookmarkGridItem({
   bookmark,
   index,
 }: {
@@ -87,7 +74,7 @@ const BookmarkGridItem = memo(function BookmarkGridItem({
   );
 });
 
-function getBreakpointConfig(userColumns: number) {
+export function getBreakpointConfig(userColumns: number) {
   const fullConfig = resolveConfig(tailwindConfig);
 
   const breakpointColumnsObj: { [key: number]: number; default: number } = {
@@ -181,10 +168,6 @@ export default function BookmarksGrid({
     (state) => state.setInBookmarkGrid,
   );
   const withinListContext = useBookmarkListContext();
-  const breakpointConfig = useMemo(
-    () => getBreakpointConfig(gridColumns),
-    [gridColumns],
-  );
   const { ref: loadMoreRef, inView: loadMoreButtonInView } = useInView();
 
   // For list/compact layouts, navigation is single-column
@@ -243,42 +226,14 @@ export default function BookmarksGrid({
     );
   }
 
-  const children = [
-    showEditorCard && (
-      <StyledBookmarkCard key={"editor"}>
-        <EditorCard />
-      </StyledBookmarkCard>
-    ),
-    ...bookmarks.map((bookmark, index) => (
-      <BookmarkGridItem key={bookmark.id} bookmark={bookmark} index={index} />
-    )),
-  ];
   return (
     <>
-      {bookmarkLayoutSwitch(layout, {
-        masonry: (
-          <SafeMasonry
-            className="-ml-4 flex w-auto"
-            columnClassName="pl-4"
-            breakpointCols={breakpointConfig}
-          >
-            {children}
-          </SafeMasonry>
-        ),
-        grid: (
-          <SafeMasonry
-            className="-ml-4 flex w-auto"
-            columnClassName="pl-4"
-            breakpointCols={breakpointConfig}
-          >
-            {children}
-          </SafeMasonry>
-        ),
-        list: <div className="grid grid-cols-1">{children}</div>,
-        compact: <div className="grid grid-cols-1">{children}</div>,
-      })}
+      <BookmarksDirectoryView
+        bookmarks={bookmarks}
+        _showEditorCard={showEditorCard}
+      />
       {hasNextPage && (
-        <div className="flex justify-center">
+        <div className="my-4 flex justify-center">
           <ActionButton
             ref={loadMoreRef}
             ignoreDemoMode={true}
