@@ -31,6 +31,9 @@ import {
   Sparkles,
   Sun,
   Moon,
+  Eye,
+  X,
+  Play,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -53,6 +56,107 @@ interface CategoryDef {
   tags: string[];
 }
 
+function getPlatformInfo(url: string | null | undefined) {
+  if (!url) {
+    return {
+      name: "Web Link",
+      color: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+      type: "web",
+      videoId: null,
+      embedUrl: null,
+    };
+  }
+
+  const lower = url.toLowerCase();
+
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+    const ytMatch = url.match(
+      /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?/\s]{11})/i,
+    );
+    return {
+      name: "YouTube",
+      color: "bg-red-500/10 text-red-500 border-red-500/20",
+      type: "youtube",
+      videoId: ytMatch ? ytMatch[1] : null,
+      embedUrl: ytMatch
+        ? `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`
+        : null,
+    };
+  }
+
+  if (lower.includes("twitter.com") || lower.includes("x.com")) {
+    return {
+      name: "X / Twitter",
+      color: "bg-sky-500/10 text-sky-500 border-sky-500/20",
+      type: "twitter",
+      videoId: null,
+      embedUrl: `https://twitframe.com/show?url=${encodeURIComponent(url)}`,
+    };
+  }
+
+  if (lower.includes("instagram.com")) {
+    const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([^/?#&]+)/i);
+    return {
+      name: "Instagram",
+      color: "bg-pink-500/10 text-pink-500 border-pink-500/20",
+      type: "instagram",
+      videoId: null,
+      embedUrl: igMatch
+        ? `https://www.instagram.com/p/${igMatch[1]}/embed`
+        : url,
+    };
+  }
+
+  if (lower.includes("github.com")) {
+    return {
+      name: "GitHub",
+      color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+      type: "github",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  if (lower.includes("threads.net")) {
+    return {
+      name: "Threads",
+      color: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+      type: "threads",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  if (lower.includes("reddit.com")) {
+    return {
+      name: "Reddit",
+      color: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      type: "reddit",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return {
+      name: host,
+      color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+      type: "web",
+      videoId: null,
+      embedUrl: url,
+    };
+  } catch {
+    return {
+      name: "Web Link",
+      color: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+      type: "web",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+}
+
 export default function BookmarksDirectoryView({
   bookmarks,
   _showEditorCard = true,
@@ -68,6 +172,13 @@ export default function BookmarksDirectoryView({
     "popular" | "newest" | "oldest" | "alphabetical"
   >("popular");
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
+
+  // Active Embed Preview Modal State
+  const [activeEmbedItem, setActiveEmbedItem] = useState<{
+    title: string;
+    url: string;
+    platform: ReturnType<typeof getPlatformInfo>;
+  } | null>(null);
 
   // Real category counts calculation from actual user bookmarks
   const categoryStats = useMemo(() => {
@@ -323,7 +434,7 @@ export default function BookmarksDirectoryView({
     return result;
   }, [bookmarks, activeCategory, searchQuery, sortBy]);
 
-  // Display items derived strictly from actual user bookmarks
+  // Display items derived strictly from actual user bookmarks with robust preview image resolution
   const displayItems = useMemo(() => {
     return filteredBookmarks.map((b, i) => {
       const title = getBookmarkTitle(b) || "Untitled Post";
@@ -338,14 +449,20 @@ export default function BookmarksDirectoryView({
         "development";
       const statsCount = Math.floor(Math.abs(Math.sin(i + 1) * 35000)) + 5000;
       const rawUrl = getSourceUrl(b);
-      const url =
-        rawUrl || `https://github.com/topics/${categoryTag.toLowerCase()}`;
-      const previewImage =
-        b.content.type === BookmarkTypes.LINK
-          ? b.content.imageUrl
-          : b.content.type === BookmarkTypes.ASSET
-            ? `/api/assets/${b.content.assetId}`
-            : null;
+      const url = rawUrl || "";
+      const platform = getPlatformInfo(url);
+
+      // Resolve live high-quality preview image for any platform
+      let previewImage: string | null = null;
+      if (b.content.type === BookmarkTypes.LINK && b.content.imageUrl) {
+        previewImage = b.content.imageUrl;
+      } else if (b.content.type === BookmarkTypes.ASSET && b.content.assetId) {
+        previewImage = `/api/assets/${b.content.assetId}`;
+      } else if (platform.type === "youtube" && platform.videoId) {
+        previewImage = `https://img.youtube.com/vi/${platform.videoId}/hqdefault.jpg`;
+      } else if (url) {
+        previewImage = `https://api.microlink.io/?url=${encodeURIComponent(url)}&embed=image.url`;
+      }
 
       return {
         id: b.id,
@@ -355,10 +472,9 @@ export default function BookmarksDirectoryView({
         categoryTag,
         statsCount,
         url,
-        previewImage:
-          previewImage ||
-          `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80`,
-        domain: url ? new URL(url).hostname : "web",
+        previewImage,
+        platform,
+        domain: url ? platform.name : "web",
       };
     });
   }, [filteredBookmarks, currentCategoryObj]);
@@ -650,8 +766,8 @@ export default function BookmarksDirectoryView({
                     Add Post & Import Data
                   </h2>
                   <p className="text-[11px] text-muted-foreground">
-                    Paste URLs, notes, or code snippets, or upload CSV, Excel
-                    (.xlsx), JSON bookmark exports.
+                    Paste URLs from X, Instagram, YouTube, TikTok, Threads,
+                    Reddit, notes, or upload CSV/Excel/JSON files.
                   </p>
                 </div>
               </div>
@@ -790,7 +906,7 @@ export default function BookmarksDirectoryView({
                   )}
                 >
                   {/* Embedded Visual Preview Box */}
-                  <div className="relative h-36 w-full overflow-hidden border-b border-border bg-muted/40">
+                  <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
                     {item.previewImage ? (
                       // oxlint-disable-next-line eslint-plugin-next/no-img-element
                       <img
@@ -798,36 +914,75 @@ export default function BookmarksDirectoryView({
                         alt={item.title}
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                         onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
+                          // Hide broken img tag gracefully and show fallback
+                          const target = e.currentTarget;
+                          target.style.display = "none";
+                          if (target.nextElementSibling) {
+                            (
+                              target.nextElementSibling as HTMLElement
+                            ).style.display = "flex";
+                          }
                         }}
                       />
-                    ) : (
-                      <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/10 via-background to-orange-500/10 p-4">
-                        <div className="flex items-center justify-between">
-                          <span className="rounded-full bg-background/80 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-foreground backdrop-blur-sm">
-                            {item.domain || "Web Link"}
-                          </span>
-                          <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                            {currentCategoryObj.icon}
-                          </div>
+                    ) : null}
+
+                    {/* Fallback Graphic Box when image is absent or errors out */}
+                    <div
+                      style={{
+                        display: item.previewImage ? "none" : "flex",
+                      }}
+                      className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={cn(
+                            "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
+                            item.platform.color,
+                          )}
+                        >
+                          {item.platform.name}
+                        </span>
+                        <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                          {currentCategoryObj.icon}
                         </div>
-                        <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground/80">
-                          {item.url || item.summary}
-                        </p>
                       </div>
+                      <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
+                        {item.url || item.summary}
+                      </p>
+                    </div>
+
+                    {/* Platform Badge Overlay on Image */}
+                    {item.previewImage && (
+                      <span
+                        className={cn(
+                          "shadow-xs absolute left-3 top-3 rounded-md border px-2 py-0.5 text-[10px] font-bold backdrop-blur-md",
+                          item.platform.color,
+                        )}
+                      >
+                        {item.platform.name}
+                      </span>
                     )}
 
-                    {/* Complete Working Link Overlay Button */}
+                    {/* Live Interactive Embed Button Overlay */}
                     {item.url && (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-                        title="Open complete working link"
+                      <button
+                        onClick={() =>
+                          setActiveEmbedItem({
+                            title: item.title,
+                            url: item.url,
+                            platform: item.platform,
+                          })
+                        }
+                        className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+                        title="Open interactive embed preview"
                       >
-                        <ExternalLink className="size-4" />
-                      </a>
+                        {item.platform.type === "youtube" ? (
+                          <Play className="size-3 fill-current" />
+                        ) : (
+                          <Eye className="size-3" />
+                        )}
+                        <span>Embed Preview</span>
+                      </button>
                     )}
                   </div>
 
@@ -907,14 +1062,92 @@ export default function BookmarksDirectoryView({
                 Workspace is empty (0 records)
               </h3>
               <p className="max-w-md text-xs text-muted-foreground">
-                All data has been cleared. Add your first post or import CSV,
-                Excel (.xlsx), or JSON files using the section above to populate
-                your workspace from 0!
+                All data has been cleared. Add your first post from X,
+                Instagram, YouTube, TikTok, or import CSV, Excel (.xlsx), or
+                JSON files using the section above to populate your workspace
+                from 0!
               </p>
             </div>
           )}
         </main>
       </div>
+
+      {/* 3. Live Interactive Embed Modal Dialog */}
+      {activeEmbedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm duration-200 animate-in fade-in">
+          <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                    activeEmbedItem.platform.color,
+                  )}
+                >
+                  {activeEmbedItem.platform.name}
+                </span>
+                <h3 className="line-clamp-1 text-sm font-bold text-foreground">
+                  {activeEmbedItem.title}
+                </h3>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href={activeEmbedItem.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                >
+                  <span>Open Original Link</span>
+                  <ExternalLink className="size-3.5" />
+                </a>
+                <button
+                  onClick={() => setActiveEmbedItem(null)}
+                  className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Live Embed Frame */}
+            <div className="relative flex-1 bg-black/90">
+              {activeEmbedItem.platform.type === "youtube" &&
+              activeEmbedItem.platform.embedUrl ? (
+                <iframe
+                  src={activeEmbedItem.platform.embedUrl}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : activeEmbedItem.platform.type === "twitter" &&
+                activeEmbedItem.platform.embedUrl ? (
+                <iframe
+                  src={activeEmbedItem.platform.embedUrl}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0 bg-white"
+                />
+              ) : activeEmbedItem.platform.type === "instagram" &&
+                activeEmbedItem.platform.embedUrl ? (
+                <iframe
+                  src={activeEmbedItem.platform.embedUrl}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0 bg-white"
+                />
+              ) : (
+                <iframe
+                  src={activeEmbedItem.url}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0 bg-white"
+                  sandbox="allow-scripts allow-same-origin allow-popups"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
