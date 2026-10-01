@@ -8,14 +8,20 @@ import { clearSupabaseData, SqliteError } from "@karakeep/db";
 import {
   assets,
   AssetTypes,
+  bookmarkAssets,
   bookmarkLinks,
   bookmarkLists,
   bookmarks,
+  bookmarksInLists,
   bookmarkTags,
+  bookmarkTexts,
   highlights,
+  importSessions,
+  importStagingBookmarks,
   passwordResetTokens,
   subscriptions,
   tagsOnBookmarks,
+  userReadingProgress,
   users,
   verificationTokens,
 } from "@karakeep/db/schema";
@@ -457,28 +463,76 @@ export class User {
 
   async clearAllData(): Promise<void> {
     const userId = this.user.id;
-    const userBookmarks = await this.ctx.db
-      .select({ id: bookmarks.id })
-      .from(bookmarks)
-      .where(eq(bookmarks.userId, userId));
-    const bookmarkIds = userBookmarks.map((b) => b.id);
+    await this.ctx.db.transaction(async (tx) => {
+      // 1. Delete staged import bookmarks and import sessions
+      const userSessions = await tx
+        .select({ id: importSessions.id })
+        .from(importSessions)
+        .where(eq(importSessions.userId, userId));
+      const sessionIds = userSessions.map((s) => s.id);
+      if (sessionIds.length > 0) {
+        await tx
+          .delete(importStagingBookmarks)
+          .where(inArray(importStagingBookmarks.importSessionId, sessionIds));
+      }
+      await tx.delete(importSessions).where(eq(importSessions.userId, userId));
 
-    if (bookmarkIds.length > 0) {
-      await this.ctx.db
-        .delete(tagsOnBookmarks)
-        .where(inArray(tagsOnBookmarks.bookmarkId, bookmarkIds));
-      await this.ctx.db
-        .delete(bookmarkLinks)
-        .where(inArray(bookmarkLinks.id, bookmarkIds));
-      await this.ctx.db.delete(bookmarks).where(eq(bookmarks.userId, userId));
-    }
+      // 2. Find all user bookmarks and user tags
+      const userBookmarks = await tx
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(eq(bookmarks.userId, userId));
+      const bookmarkIds = userBookmarks.map((b) => b.id);
 
-    await this.ctx.db
-      .delete(bookmarkTags)
-      .where(eq(bookmarkTags.userId, userId));
-    await this.ctx.db
-      .delete(bookmarkLists)
-      .where(eq(bookmarkLists.userId, userId));
+      const userTags = await tx
+        .select({ id: bookmarkTags.id })
+        .from(bookmarkTags)
+        .where(eq(bookmarkTags.userId, userId));
+      const tagIds = userTags.map((t) => t.id);
+
+      // 3. Delete join tables and dependent records
+      if (tagIds.length > 0) {
+        await tx
+          .delete(tagsOnBookmarks)
+          .where(inArray(tagsOnBookmarks.tagId, tagIds));
+      }
+
+      if (bookmarkIds.length > 0) {
+        await tx
+          .delete(tagsOnBookmarks)
+          .where(inArray(tagsOnBookmarks.bookmarkId, bookmarkIds));
+        await tx
+          .delete(bookmarksInLists)
+          .where(inArray(bookmarksInLists.bookmarkId, bookmarkIds));
+        await tx
+          .delete(bookmarkLinks)
+          .where(inArray(bookmarkLinks.id, bookmarkIds));
+        await tx
+          .delete(bookmarkTexts)
+          .where(inArray(bookmarkTexts.id, bookmarkIds));
+        await tx
+          .delete(bookmarkAssets)
+          .where(inArray(bookmarkAssets.id, bookmarkIds));
+        await tx.delete(assets).where(inArray(assets.bookmarkId, bookmarkIds));
+        await tx
+          .delete(highlights)
+          .where(inArray(highlights.bookmarkId, bookmarkIds));
+        await tx
+          .delete(userReadingProgress)
+          .where(inArray(userReadingProgress.bookmarkId, bookmarkIds));
+      }
+
+      // 4. Delete user level tables
+      await tx.delete(highlights).where(eq(highlights.userId, userId));
+      await tx
+        .delete(userReadingProgress)
+        .where(eq(userReadingProgress.userId, userId));
+      await tx.delete(bookmarks).where(eq(bookmarks.userId, userId));
+      await tx.delete(bookmarkTags).where(eq(bookmarkTags.userId, userId));
+      await tx.delete(bookmarkLists).where(eq(bookmarkLists.userId, userId));
+      await tx.delete(assets).where(eq(assets.userId, userId));
+    });
+
     await clearSupabaseData().catch((err) => {
       console.warn("Supabase clear background error:", err?.message || err);
     });
