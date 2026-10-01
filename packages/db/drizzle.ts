@@ -6,8 +6,8 @@ import * as schema from "./schema";
 const connectionString =
   process.env.DATABASE_URL ||
   process.env.SUPABASE_DATABASE_URL ||
-  serverConfig.supabase?.url ||
-  "postgresql://postgres:SidGajera07*@db.erokumwxbkiabmwsmwpx.supabase.co:5432/postgres";
+  serverConfig.supabase?.databaseUrl ||
+  "postgresql://postgres.erokumwxbkiabmwsmwpx:SidGajera07*@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres";
 
 export const pool = new pg.Pool({
   connectionString,
