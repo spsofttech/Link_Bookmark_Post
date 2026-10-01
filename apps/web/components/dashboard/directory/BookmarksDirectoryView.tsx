@@ -61,7 +61,7 @@ export default function BookmarksDirectoryView({
   _showEditorCard?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
-  const [activeCategory, setActiveCategory] = useState<string>("skills");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState<
@@ -69,7 +69,7 @@ export default function BookmarksDirectoryView({
   >("popular");
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
 
-  // Category counts calculation
+  // Real category counts calculation from actual user bookmarks
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {
       all: bookmarks.length,
@@ -84,11 +84,11 @@ export default function BookmarksDirectoryView({
       "audio-podcast": 0,
       "document-pdf": 0,
       "product-tool": 0,
-      settings: 72,
-      hooks: 62,
-      mcps: 104,
-      mods: 34,
-      plugins: 34,
+      settings: 0,
+      hooks: 0,
+      mcps: 0,
+      mods: 0,
+      plugins: 0,
     };
 
     bookmarks.forEach((b) => {
@@ -146,13 +146,6 @@ export default function BookmarksDirectoryView({
       )
         stats["product-tool"]++;
     });
-
-    // Default template counts if workspace is empty
-    if (stats.skills === 0) stats.skills = 889;
-    if (stats.agents === 0) stats.agents = 422;
-    if (stats.commands === 0) stats.commands = 288;
-    if (stats["share-image"] === 0) stats["share-image"] = 156;
-    if (stats["code-tech"] === 0) stats["code-tech"] = 312;
 
     return stats;
   }, [bookmarks]);
@@ -240,8 +233,18 @@ export default function BookmarksDirectoryView({
     },
   ];
 
-  const currentCategoryObj =
-    categories.find((c) => c.id === activeCategory) || categories[0];
+  const currentCategoryObj = categories.find(
+    (c) => c.id === activeCategory,
+  ) || {
+    id: "all",
+    name: "All Components",
+    count: categoryStats.all,
+    icon: <Boxes className="size-4 text-amber-500" />,
+    iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+    description:
+      "All posts and bookmarks organized by category across your workspace",
+    tags: ["all"],
+  };
 
   // Filter & Sort Bookmarks
   const filteredBookmarks = useMemo(() => {
@@ -256,9 +259,7 @@ export default function BookmarksDirectoryView({
         const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
         if (activeCategory === "skills")
-          return (
-            tagNames.includes("skills") || fullText.includes("skill") || true
-          );
+          return tagNames.includes("skills") || fullText.includes("skill");
         if (activeCategory === "agents")
           return tagNames.includes("agents") || fullText.includes("agent");
         if (activeCategory === "commands")
@@ -322,182 +323,49 @@ export default function BookmarksDirectoryView({
     return result;
   }, [bookmarks, activeCategory, searchQuery, sortBy]);
 
-  // Items with complete working links and embedded previews
+  // Display items derived strictly from actual user bookmarks
   const displayItems = useMemo(() => {
-    if (filteredBookmarks.length > 0) {
-      return filteredBookmarks.map((b, i) => {
-        const title = getBookmarkTitle(b) || "Untitled Post";
-        const summary =
-          b.summary ||
-          b.note ||
-          (b.content.type === BookmarkTypes.LINK
-            ? b.content.description
-            : "") ||
-          "Comprehensive template and workflow configuration.";
-        const categoryTag =
-          b.tags?.[0]?.name ||
-          currentCategoryObj.tags[i % currentCategoryObj.tags.length] ||
-          "development";
-        const statsCount = Math.floor(Math.abs(Math.sin(i + 1) * 35000)) + 5000;
-        const rawUrl = getSourceUrl(b);
-        const url =
-          rawUrl || `https://github.com/topics/${categoryTag.toLowerCase()}`;
-        const previewImage =
-          b.content.type === BookmarkTypes.LINK
-            ? b.content.imageUrl
-            : b.content.type === BookmarkTypes.ASSET
-              ? `/api/assets/${b.content.assetId}`
-              : null;
+    return filteredBookmarks.map((b, i) => {
+      const title = getBookmarkTitle(b) || "Untitled Post";
+      const summary =
+        b.summary ||
+        b.note ||
+        (b.content.type === BookmarkTypes.LINK ? b.content.description : "") ||
+        "Bookmark post.";
+      const categoryTag =
+        b.tags?.[0]?.name ||
+        currentCategoryObj.tags[i % currentCategoryObj.tags.length] ||
+        "development";
+      const statsCount = Math.floor(Math.abs(Math.sin(i + 1) * 35000)) + 5000;
+      const rawUrl = getSourceUrl(b);
+      const url =
+        rawUrl || `https://github.com/topics/${categoryTag.toLowerCase()}`;
+      const previewImage =
+        b.content.type === BookmarkTypes.LINK
+          ? b.content.imageUrl
+          : b.content.type === BookmarkTypes.ASSET
+            ? `/api/assets/${b.content.assetId}`
+            : null;
 
-        return {
-          id: b.id,
-          bookmark: b as ZBookmark | null,
-          title,
-          summary,
-          categoryTag,
-          statsCount,
-          url,
-          previewImage:
-            previewImage ||
-            `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80`,
-          domain: url ? new URL(url).hostname : "github.com",
-        };
-      });
-    }
-
-    // Default template cards matching user design when zero bookmarks exist
-    const defaults = [
-      {
-        id: "def-1",
-        bookmark: null as ZBookmark | null,
-        title:
-          activeCategory === "agents"
-            ? "Frontend Developer Agent"
-            : "Frontend Design Skill",
-        summary:
-          "Guidance for distinctive, intentional visual design when building new UI or reshaping existing apps. Includes aesthetic presets and layout helpers.",
-        categoryTag: "creative-design",
-        statsCount: 47997,
-        url: "https://github.com/topics/frontend-design",
+      return {
+        id: b.id,
+        bookmark: b as ZBookmark | null,
+        title,
+        summary,
+        categoryTag,
+        statsCount,
+        url,
         previewImage:
-          "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-2",
-        bookmark: null as ZBookmark | null,
-        title: "Code Reviewer Bot",
-        summary:
-          "Comprehensive automated code reviewer for TypeScript, JavaScript, Python, Swift, Kotlin, Go. Identifies anti-patterns and performance bottlenecks.",
-        categoryTag: "development",
-        statsCount: 31845,
-        url: "https://github.com/topics/code-review",
-        previewImage:
-          "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-3",
-        bookmark: null as ZBookmark | null,
-        title:
-          activeCategory === "agents"
-            ? "UI/UX Designer Agent"
-            : "Senior Frontend Framework",
-        summary:
-          "Modern frontend development architecture and state management recipes for Next.js, React 19, TailwindCSS, and tRPC.",
-        categoryTag: "development",
-        statsCount: 28645,
-        url: "https://github.com/topics/nextjs",
-        previewImage:
-          "https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-4",
-        bookmark: null as ZBookmark | null,
-        title: "UI UX Pro Max Kit",
-        summary:
-          "UI/UX design intelligence suite. 50 design styles, 21 color palettes, 50 font pairings, 20 charts, and 9 frontend framework stacks.",
-        categoryTag: "creative-design",
-        statsCount: 26782,
-        url: "https://github.com/topics/ui-design",
-        previewImage:
-          "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-5",
-        bookmark: null as ZBookmark | null,
-        title: "Senior Backend Service Engine",
-        summary:
-          "Scalable microservices architecture patterns using Node.js, Hono, Go, PostgreSQL, Drizzle ORM, and Redis caching.",
-        categoryTag: "development",
-        statsCount: 24771,
-        url: "https://github.com/topics/backend",
-        previewImage:
-          "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-6",
-        bookmark: null as ZBookmark | null,
-        title: "Senior System Architect Guide",
-        summary:
-          "Distributed systems design guidelines, database sharding strategies, API rate limiting, and event-driven messaging patterns.",
-        categoryTag: "development",
-        statsCount: 28226,
-        url: "https://github.com/topics/system-architecture",
-        previewImage:
-          "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-7",
-        bookmark: null as ZBookmark | null,
-        title: "AI Skill Creator & Tooling",
-        summary:
-          "Toolkit for building, testing, and benchmark evaluating custom agent skills and tools with natural language instructions.",
-        categoryTag: "development",
-        statsCount: 16736,
-        url: "https://github.com/topics/ai-agents",
-        previewImage:
-          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-8",
-        bookmark: null as ZBookmark | null,
-        title: "Design System Tokens",
-        summary:
-          "Design token management, automated component documentation, dark mode palette generators, and accessibility validators.",
-        categoryTag: "creative-design",
-        statsCount: 16186,
-        url: "https://github.com/topics/design-systems",
-        previewImage:
-          "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-      {
-        id: "def-9",
-        bookmark: null as ZBookmark | null,
-        title: "React Performance Best Practices",
-        summary:
-          "Comprehensive guide with 40+ actionable rules for eliminating component re-render waterfalls, bundle chunking, and memory leak prevention.",
-        categoryTag: "web-development",
-        statsCount: 12969,
-        url: "https://github.com/topics/reactjs",
-        previewImage:
-          "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&auto=format&fit=crop&q=80",
-        domain: "github.com",
-      },
-    ];
-
-    return defaults;
-  }, [filteredBookmarks, activeCategory, currentCategoryObj]);
+          previewImage ||
+          `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80`,
+        domain: url ? new URL(url).hostname : "web",
+      };
+    });
+  }, [filteredBookmarks, currentCategoryObj]);
 
   return (
     <div className="fixed inset-0 z-40 flex h-screen w-screen overflow-hidden bg-background font-sans text-foreground">
-      {/* 1. Primary Left Page Sidebar - AI Templates & Categories */}
+      {/* 1. Primary Left Page Sidebar - AI Templates & Real Categories */}
       <aside
         className={cn(
           "flex shrink-0 flex-col border-r border-border bg-card/60 transition-all duration-200",
@@ -605,31 +473,31 @@ export default function BookmarksDirectoryView({
                 );
               })}
 
-              {/* Static category links matching design menu */}
+              {/* Dynamic menu items */}
               {[
                 {
                   name: "Settings",
-                  count: 72,
+                  count: categoryStats.settings,
                   icon: <Settings className="size-4 text-gray-400" />,
                 },
                 {
                   name: "Hooks",
-                  count: 62,
+                  count: categoryStats.hooks,
                   icon: <Webhook className="size-4 text-gray-400" />,
                 },
                 {
                   name: "MCPs",
-                  count: 104,
+                  count: categoryStats.mcps,
                   icon: <Cpu className="size-4 text-gray-400" />,
                 },
                 {
                   name: "Mods",
-                  count: 34,
+                  count: categoryStats.mods,
                   icon: <Wrench className="size-4 text-gray-400" />,
                 },
                 {
                   name: "Plugins",
-                  count: 34,
+                  count: categoryStats.plugins,
                   icon: <Boxes className="size-4 text-gray-400" />,
                 },
               ].map((item) => (
@@ -904,131 +772,147 @@ export default function BookmarksDirectoryView({
             </span>
           </div>
 
-          {/* 3-Column Component Cards Grid with Embedded Previews & Complete Working Links */}
-          <div
-            className={cn(
-              viewMode === "grid"
-                ? "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3"
-                : "flex flex-col gap-3",
-            )}
-          >
-            {displayItems.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200",
-                  "hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
-                )}
-              >
-                {/* Embedded Visual Preview Box */}
-                <div className="relative h-36 w-full overflow-hidden border-b border-border bg-muted/40">
-                  {item.previewImage ? (
-                    // oxlint-disable-next-line eslint-plugin-next/no-img-element
-                    <img
-                      src={item.previewImage}
-                      alt={item.title}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/10 via-background to-orange-500/10 p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="rounded-full bg-background/80 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-foreground backdrop-blur-sm">
-                          {item.domain || "Web Link"}
-                        </span>
-                        <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                          {currentCategoryObj.icon}
+          {/* 3-Column Component Cards Grid OR Clean Empty Workspace Banner */}
+          {displayItems.length > 0 ? (
+            <div
+              className={cn(
+                viewMode === "grid"
+                  ? "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3"
+                  : "flex flex-col gap-3",
+              )}
+            >
+              {displayItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200",
+                    "hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
+                  )}
+                >
+                  {/* Embedded Visual Preview Box */}
+                  <div className="relative h-36 w-full overflow-hidden border-b border-border bg-muted/40">
+                    {item.previewImage ? (
+                      // oxlint-disable-next-line eslint-plugin-next/no-img-element
+                      <img
+                        src={item.previewImage}
+                        alt={item.title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/10 via-background to-orange-500/10 p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="rounded-full bg-background/80 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-foreground backdrop-blur-sm">
+                            {item.domain || "Web Link"}
+                          </span>
+                          <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                            {currentCategoryObj.icon}
+                          </div>
                         </div>
+                        <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground/80">
+                          {item.url || item.summary}
+                        </p>
                       </div>
-                      <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground/80">
-                        {item.url || item.summary}
-                      </p>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Complete Working Link Overlay Button */}
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-                      title="Open complete working link"
-                    >
-                      <ExternalLink className="size-4" />
-                    </a>
-                  )}
-                </div>
-
-                {/* Card Main Content */}
-                <div className="space-y-3 p-4">
-                  {/* Card Title & Icon */}
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                      {currentCategoryObj.icon}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
+                    {/* Complete Working Link Overlay Button */}
+                    {item.url && (
                       <a
-                        href={item.url || "#"}
-                        target={item.url ? "_blank" : "_self"}
+                        href={item.url}
+                        target="_blank"
                         rel="noreferrer"
-                        className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+                        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+                        title="Open complete working link"
                       >
-                        {item.title}
+                        <ExternalLink className="size-4" />
                       </a>
-                    </div>
-
-                    {item.bookmark && (
-                      <div className="opacity-0 transition-opacity group-hover:opacity-100">
-                        <BookmarkOptions bookmark={item.bookmark} />
-                      </div>
                     )}
                   </div>
 
-                  {/* Card Description */}
-                  <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                    {item.summary}
-                  </p>
-                </div>
+                  {/* Card Main Content */}
+                  <div className="space-y-3 p-4">
+                    {/* Card Title & Icon */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                        {currentCategoryObj.icon}
+                      </div>
 
-                {/* Bottom Bar: Tag + Stats + Complete Working Link */}
-                <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                      {item.categoryTag}
-                    </span>
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={item.url || "#"}
+                          target={item.url ? "_blank" : "_self"}
+                          rel="noreferrer"
+                          className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+                        >
+                          {item.title}
+                        </a>
+                      </div>
 
-                    <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      <Download className="size-2.5" />
-                      <span>{item.statsCount.toLocaleString()}</span>
+                      {item.bookmark && (
+                        <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                          <BookmarkOptions bookmark={item.bookmark} />
+                        </div>
+                      )}
                     </div>
+
+                    {/* Card Description */}
+                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {item.summary}
+                    </p>
                   </div>
 
-                  {/* Complete Working Link Action */}
-                  {item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
-                    >
-                      <span className="max-w-[130px] truncate">
-                        {item.url.replace(/^https?:\/\//, "")}
+                  {/* Bottom Bar: Tag + Stats + Complete Working Link */}
+                  <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {item.categoryTag}
                       </span>
-                      <ExternalLink className="size-3 shrink-0" />
-                    </a>
-                  ) : (
-                    <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
-                      <Plus className="size-3" />
-                    </button>
-                  )}
+
+                      <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        <Download className="size-2.5" />
+                        <span>{item.statsCount.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Complete Working Link Action */}
+                    {item.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+                      >
+                        <span className="max-w-[130px] truncate">
+                          {item.url.replace(/^https?:\/\//, "")}
+                        </span>
+                        <ExternalLink className="size-3 shrink-0" />
+                      </a>
+                    ) : (
+                      <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
+                        <Plus className="size-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+                <Boxes className="size-7" />
               </div>
-            ))}
-          </div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                Workspace is empty (0 records)
+              </h3>
+              <p className="max-w-md text-xs text-muted-foreground">
+                All data has been cleared. Add your first post or import CSV,
+                Excel (.xlsx), or JSON files using the section above to populate
+                your workspace from 0!
+              </p>
+            </div>
+          )}
         </main>
       </div>
     </div>
