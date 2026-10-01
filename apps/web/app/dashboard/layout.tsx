@@ -48,12 +48,35 @@ export default async function Dashboard({
         redirect("/logout");
       }
     }
-    throw userSettings.error;
+    console.error(
+      "Failed to load user settings in dashboard layout:",
+      userSettings.error,
+    );
   }
 
   if (lists.error) {
-    throw lists.error;
+    console.error("Failed to load lists in dashboard layout:", lists.error);
   }
+
+  const fallbackSettings = {
+    bookmarkClickAction: "open_original_link" as const,
+    archiveDisplayBehaviour: "show" as const,
+    timezone: "UTC",
+    backupsEnabled: false,
+    backupsFrequency: "weekly" as const,
+    backupsRetentionDays: 30,
+    readerFontSize: null,
+    readerLineHeight: null,
+    readerFontFamily: null,
+    autoTaggingEnabled: null,
+    autoSummarizationEnabled: null,
+    tagStyle: "titlecase-spaces" as const,
+    curatedTagIds: null,
+    inferredTagLang: null,
+  };
+
+  const initialUserSettings = userSettings.data || fallbackSettings;
+  const initialLists = lists.data || { lists: [] };
 
   const items = (t: TFunction) =>
     [
@@ -98,7 +121,7 @@ export default async function Dashboard({
   ];
 
   return (
-    <UserSettingsContextProvider userSettings={userSettings.data}>
+    <UserSettingsContextProvider userSettings={initialUserSettings}>
       <ReaderSettingsProvider>
         <SidebarLayout
           sidebar={
@@ -107,7 +130,7 @@ export default async function Dashboard({
               extraSections={
                 <>
                   <Separator />
-                  <AllLists initialData={lists.data} />
+                  <AllLists initialData={initialLists} />
                 </>
               }
             />

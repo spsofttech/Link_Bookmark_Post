@@ -540,20 +540,20 @@ export class User {
     }
 
     return {
-      bookmarkClickAction: settings.bookmarkClickAction,
-      archiveDisplayBehaviour: settings.archiveDisplayBehaviour,
+      bookmarkClickAction: settings.bookmarkClickAction || "open_original_link",
+      archiveDisplayBehaviour: settings.archiveDisplayBehaviour || "show",
       timezone: settings.timezone || "UTC",
-      backupsEnabled: settings.backupsEnabled,
-      backupsFrequency: settings.backupsFrequency,
-      backupsRetentionDays: settings.backupsRetentionDays,
-      readerFontSize: settings.readerFontSize,
-      readerLineHeight: settings.readerLineHeight,
-      readerFontFamily: settings.readerFontFamily,
-      autoTaggingEnabled: settings.autoTaggingEnabled,
-      autoSummarizationEnabled: settings.autoSummarizationEnabled,
+      backupsEnabled: settings.backupsEnabled ?? false,
+      backupsFrequency: settings.backupsFrequency || "weekly",
+      backupsRetentionDays: settings.backupsRetentionDays ?? 30,
+      readerFontSize: settings.readerFontSize ?? null,
+      readerLineHeight: settings.readerLineHeight ?? null,
+      readerFontFamily: settings.readerFontFamily ?? null,
+      autoTaggingEnabled: settings.autoTaggingEnabled ?? null,
+      autoSummarizationEnabled: settings.autoSummarizationEnabled ?? null,
       tagStyle: settings.tagStyle ?? "as-generated",
       curatedTagIds: settings.curatedTagIds ?? null,
-      inferredTagLang: settings.inferredTagLang,
+      inferredTagLang: settings.inferredTagLang ?? null,
     };
   }
 

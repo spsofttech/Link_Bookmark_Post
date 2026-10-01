@@ -12,6 +12,9 @@ const connectionString =
 export const pool = new pg.Pool({
   connectionString,
   ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 export const db = drizzle(pool, { schema });

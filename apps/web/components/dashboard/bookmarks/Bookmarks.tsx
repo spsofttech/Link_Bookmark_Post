@@ -23,9 +23,17 @@ export default async function Bookmarks({
     redirect("/");
   }
 
-  const bookmarks = await api.bookmarks.getBookmarks({
-    ...query,
-  });
+  let bookmarks: Awaited<ReturnType<typeof api.bookmarks.getBookmarks>> = {
+    bookmarks: [],
+    nextCursor: null,
+  };
+  try {
+    bookmarks = await api.bookmarks.getBookmarks({
+      ...query,
+    });
+  } catch (error) {
+    console.error("Failed to fetch initial bookmarks:", error);
+  }
 
   return (
     <div className="flex flex-col gap-3">
