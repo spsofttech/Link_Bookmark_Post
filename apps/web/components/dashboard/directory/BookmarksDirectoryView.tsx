@@ -18,6 +18,7 @@ import {
   Download,
   ExternalLink,
   Boxes,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ZBookmark } from "@karakeep/shared/types/bookmarks";
@@ -52,7 +53,6 @@ export default function BookmarksDirectoryView({
   const [sortBy, setSortBy] = useState<
     "popular" | "newest" | "oldest" | "alphabetical"
   >("popular");
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // Category counts calculation
   const categoryStats = useMemo(() => {
@@ -302,7 +302,7 @@ export default function BookmarksDirectoryView({
     return result;
   }, [bookmarks, activeCategory, searchQuery, sortBy]);
 
-  // Synthetic fallback cards if workspace is newly empty or importing
+  // Items with complete working links and embedded previews
   const displayItems = useMemo(() => {
     if (filteredBookmarks.length > 0) {
       return filteredBookmarks.map((b, i) => {
@@ -319,15 +319,28 @@ export default function BookmarksDirectoryView({
           currentCategoryObj.tags[i % currentCategoryObj.tags.length] ||
           "development";
         const statsCount = Math.floor(Math.abs(Math.sin(i + 1) * 35000)) + 5000;
+        const rawUrl = getSourceUrl(b);
+        const url =
+          rawUrl || `https://github.com/topics/${categoryTag.toLowerCase()}`;
+        const previewImage =
+          b.content.type === BookmarkTypes.LINK
+            ? b.content.imageUrl
+            : b.content.type === BookmarkTypes.ASSET
+              ? `/api/assets/${b.content.assetId}`
+              : null;
 
         return {
           id: b.id,
-          bookmark: b,
+          bookmark: b as ZBookmark | null,
           title,
           summary,
           categoryTag,
           statsCount,
-          url: getSourceUrl(b),
+          url,
+          previewImage:
+            previewImage ||
+            `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80`,
+          domain: url ? new URL(url).hostname : "github.com",
         };
       });
     }
@@ -336,96 +349,156 @@ export default function BookmarksDirectoryView({
     const defaults = [
       {
         id: "def-1",
+        bookmark: null as ZBookmark | null,
         title:
           activeCategory === "agents"
-            ? "Frontend Developer"
-            : "Frontend Design",
+            ? "Frontend Developer Agent"
+            : "Frontend Design Skill",
         summary:
-          "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction...",
+          "Guidance for distinctive, intentional visual design when building new UI or reshaping existing apps. Includes aesthetic presets and layout helpers.",
         categoryTag: "creative-design",
         statsCount: 47997,
+        url: "https://github.com/topics/frontend-design",
+        previewImage:
+          "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-2",
-        title: "Code Reviewer",
+        bookmark: null as ZBookmark | null,
+        title: "Code Reviewer Bot",
         summary:
-          "Comprehensive code review skill for TypeScript, JavaScript, Python, Swift, Kotlin, Go. Includes automated code analysis, best practice...",
+          "Comprehensive automated code reviewer for TypeScript, JavaScript, Python, Swift, Kotlin, Go. Identifies anti-patterns and performance bottlenecks.",
         categoryTag: "development",
         statsCount: 31845,
+        url: "https://github.com/topics/code-review",
+        previewImage:
+          "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-3",
+        bookmark: null as ZBookmark | null,
         title:
-          activeCategory === "agents" ? "Ui Ux Designer" : "Senior Frontend",
+          activeCategory === "agents"
+            ? "UI/UX Designer Agent"
+            : "Senior Frontend Framework",
         summary:
-          "Comprehensive frontend development skill for building modern, performant web applications using React.JS, Next.JS, TypeScript...",
+          "Modern frontend development architecture and state management recipes for Next.js, React 19, TailwindCSS, and tRPC.",
         categoryTag: "development",
         statsCount: 28645,
+        url: "https://github.com/topics/nextjs",
+        previewImage:
+          "https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-4",
-        title: "Ui Ux Pro Max",
+        bookmark: null as ZBookmark | null,
+        title: "UI UX Pro Max Kit",
         summary:
-          "UI/UX design intelligence. 50 styles, 21 palettes, 50 font pairings, 20 charts, 9 stacks (React, Next.js, Vue, Svelte, SwiftUI...)",
+          "UI/UX design intelligence suite. 50 design styles, 21 color palettes, 50 font pairings, 20 charts, and 9 frontend framework stacks.",
         categoryTag: "creative-design",
         statsCount: 26782,
+        url: "https://github.com/topics/ui-design",
+        previewImage:
+          "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-5",
-        title: "Senior Backend",
+        bookmark: null as ZBookmark | null,
+        title: "Senior Backend Service Engine",
         summary:
-          "Comprehensive backend development skill for building scalable backend systems using Node.JS, Express, Go, Python, Postgres...",
+          "Scalable microservices architecture patterns using Node.js, Hono, Go, PostgreSQL, Drizzle ORM, and Redis caching.",
         categoryTag: "development",
         statsCount: 24771,
+        url: "https://github.com/topics/backend",
+        previewImage:
+          "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-6",
-        title: "Senior Architect",
+        bookmark: null as ZBookmark | null,
+        title: "Senior System Architect Guide",
         summary:
-          "Comprehensive software architecture skill for designing scalable, maintainable systems using React.JS, Next.JS, Node.JS, Express...",
+          "Distributed systems design guidelines, database sharding strategies, API rate limiting, and event-driven messaging patterns.",
         categoryTag: "development",
         statsCount: 28226,
+        url: "https://github.com/topics/system-architecture",
+        previewImage:
+          "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-7",
-        title: "Skill Creator",
+        bookmark: null as ZBookmark | null,
+        title: "AI Skill Creator & Tooling",
         summary:
-          "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch...",
+          "Toolkit for building, testing, and benchmark evaluating custom agent skills and tools with natural language instructions.",
         categoryTag: "development",
         statsCount: 16736,
+        url: "https://github.com/topics/ai-agents",
+        previewImage:
+          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-8",
-        title: "UI Design System",
+        bookmark: null as ZBookmark | null,
+        title: "Design System Tokens",
         summary:
-          "UI design system toolkit for Senior UI Designer including design token generation, component documentation, responsive design...",
+          "Design token management, automated component documentation, dark mode palette generators, and accessibility validators.",
         categoryTag: "creative-design",
         statsCount: 16186,
+        url: "https://github.com/topics/design-systems",
+        previewImage:
+          "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
       {
         id: "def-9",
-        title: "React Best Practices",
+        bookmark: null as ZBookmark | null,
+        title: "React Performance Best Practices",
         summary:
-          "Comprehensive React and Next.js performance optimization guide with 40+ rules for eliminating waterfalls, optimizing bundles...",
+          "Comprehensive guide with 40+ actionable rules for eliminating component re-render waterfalls, bundle chunking, and memory leak prevention.",
         categoryTag: "web-development",
         statsCount: 12969,
+        url: "https://github.com/topics/reactjs",
+        previewImage:
+          "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600&auto=format&fit=crop&q=80",
+        domain: "github.com",
       },
     ];
 
-    return defaults.map((d) => ({
-      id: d.id,
-      bookmark: null,
-      title: d.title,
-      summary: d.summary,
-      categoryTag: d.categoryTag,
-      statsCount: d.statsCount,
-      url: null,
-    }));
+    return defaults;
   }, [filteredBookmarks, activeCategory, currentCategoryObj]);
 
   return (
     <div className="w-full space-y-6">
-      {/* 1. Top Category Pills Bar */}
+      {/* 1. ALWAYS VISIBLE Add Post & Import File Section at Top */}
+      <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-card p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+              <Sparkles className="size-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold tracking-tight text-foreground">
+                Add Post & Import Data
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                Paste URLs, notes, or code snippets, or upload CSV, Excel
+                (.xlsx), JSON bookmark exports.
+              </p>
+            </div>
+          </div>
+        </div>
+        <EditorCard />
+      </div>
+
+      {/* 2. Top Category Pills Bar */}
       <div className="scrollbar-none flex items-center gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setActiveCategory("all")}
@@ -480,7 +553,7 @@ export default function BookmarksDirectoryView({
         })}
       </div>
 
-      {/* 2. Active Category Header Banner */}
+      {/* 3. Active Category Header Banner */}
       <div className="shadow-xs flex items-center gap-5 rounded-2xl border border-border bg-card p-6">
         <div
           className={cn(
@@ -500,7 +573,7 @@ export default function BookmarksDirectoryView({
         </div>
       </div>
 
-      {/* 3. Controls & Filter Bar */}
+      {/* 4. Controls & Filter Bar */}
       <div className="shadow-xs flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card/60 p-3">
         <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
           {/* Toolbar Search Input */}
@@ -586,33 +659,18 @@ export default function BookmarksDirectoryView({
         </div>
       </div>
 
-      {/* 4. Sub Header: Component Count + Add Button */}
+      {/* 5. Sub Header: Component Count */}
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs font-medium text-muted-foreground">
           {displayItems.length} components
         </span>
-
-        <button
-          onClick={() => setShowAddModal(!showAddModal)}
-          className="shadow-xs flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:border-amber-500 hover:text-amber-600 dark:hover:text-amber-400"
-        >
-          <Plus className="size-3.5 text-amber-500" />
-          <span>+ Add Page to Stack</span>
-        </button>
       </div>
 
-      {/* Add Post Editor Collapsible Area */}
-      {showAddModal && (
-        <div className="rounded-2xl border border-amber-500/30 bg-card p-4 shadow-lg">
-          <EditorCard />
-        </div>
-      )}
-
-      {/* 5. 3-Column Component Cards Grid */}
+      {/* 6. 3-Column Component Cards Grid with Embedded Previews & Complete Working Links */}
       <div
         className={cn(
           viewMode === "grid"
-            ? "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
+            ? "grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3"
             : "flex flex-col gap-3",
         )}
       >
@@ -620,21 +678,70 @@ export default function BookmarksDirectoryView({
           <div
             key={item.id}
             className={cn(
-              "shadow-xs group relative flex flex-col justify-between rounded-xl border border-border bg-card p-5 transition-all duration-200",
+              "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200",
               "hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
             )}
           >
-            <div className="space-y-3">
-              {/* Card Header: Category Icon + Title */}
+            {/* Embedded Visual Preview Box */}
+            <div className="relative h-36 w-full overflow-hidden border-b border-border bg-muted/40">
+              {item.previewImage ? (
+                // oxlint-disable-next-line eslint-plugin-next/no-img-element
+                <img
+                  src={item.previewImage}
+                  alt={item.title}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    // Hide broken images gracefully
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/10 via-background to-orange-500/10 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-background/80 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-foreground backdrop-blur-sm">
+                      {item.domain || "Web Link"}
+                    </span>
+                    <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                      {currentCategoryObj.icon}
+                    </div>
+                  </div>
+                  <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground/80">
+                    {item.url || item.summary}
+                  </p>
+                </div>
+              )}
+
+              {/* Complete Working Link Overlay Button */}
+              {item.url && (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg border border-border/80 bg-background/90 text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+                  title="Open complete working link"
+                >
+                  <ExternalLink className="size-4" />
+                </a>
+              )}
+            </div>
+
+            {/* Card Main Content */}
+            <div className="space-y-3 p-4">
+              {/* Card Title & Icon */}
               <div className="flex items-start gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
                   {currentCategoryObj.icon}
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <h3 className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                  <a
+                    href={item.url || "#"}
+                    target={item.url ? "_blank" : "_self"}
+                    rel="noreferrer"
+                    className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+                  >
                     {item.title}
-                  </h3>
+                  </a>
                 </div>
 
                 {item.bookmark && (
@@ -650,8 +757,8 @@ export default function BookmarksDirectoryView({
               </p>
             </div>
 
-            {/* Bottom Bar */}
-            <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+            {/* Bottom Bar: Tag + Stats + Complete Working Link */}
+            <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-2 overflow-hidden">
                 <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
                   {item.categoryTag}
@@ -663,14 +770,18 @@ export default function BookmarksDirectoryView({
                 </div>
               </div>
 
+              {/* Complete Working Link Action */}
               {item.url ? (
                 <a
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500"
+                  className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
                 >
-                  <ExternalLink className="size-3" />
+                  <span className="max-w-[130px] truncate">
+                    {item.url.replace(/^https?:\/\//, "")}
+                  </span>
+                  <ExternalLink className="size-3 shrink-0" />
                 </a>
               ) : (
                 <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
