@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 import {
   buildDBClient,
   SqliteQueue as LQ,
@@ -23,6 +24,14 @@ import {
   QueueRetryAfterError,
   queueOptionsEqual,
 } from "@karakeep/shared/queueing";
+
+function getQueueDbPath(): string {
+  const dataDir = serverConfig.dataDir || path.resolve(process.cwd(), "data");
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, "queue.db");
+}
 
 class LitequeQueueWrapper<T> implements Queue<T> {
   constructor(
@@ -63,7 +72,7 @@ class LitequeQueueWrapper<T> implements Queue<T> {
 }
 
 class LitequeQueueClient implements QueueClient {
-  private db = buildDBClient(path.join(serverConfig.dataDir, "queue.db"), {
+  private db = buildDBClient(getQueueDbPath(), {
     walEnabled: serverConfig.database.walMode,
     runMigrations: true,
   });
