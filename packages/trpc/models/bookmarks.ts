@@ -1122,36 +1122,54 @@ export class Bookmark extends BareBookmark {
         ),
       );
 
-    await SearchIndexingQueue.enqueue(
-      {
-        bookmarkId: this.bookmark.id,
-        type: "delete",
-      },
-      {
-        groupId: this.ctx.user.id,
-      },
-    );
-    await EmbeddingsQueue.enqueue(
-      {
-        bookmarkId: this.bookmark.id,
-        type: "delete",
-      },
-      {
-        groupId: this.ctx.user.id,
-      },
-    );
+    try {
+      await SearchIndexingQueue.enqueue(
+        {
+          bookmarkId: this.bookmark.id,
+          type: "delete",
+        },
+        {
+          groupId: this.ctx.user.id,
+        },
+      );
+    } catch (err) {
+      console.warn("Failed to enqueue search index delete:", err);
+    }
 
-    const webhookService = new WebhooksService(this.ctx.db);
-    await webhookService.triggerWebhook(
-      this.bookmark.id,
-      "deleted",
-      this.bookmark.userId,
-      {
-        groupId: this.ctx.user.id,
-      },
-    );
+    try {
+      await EmbeddingsQueue.enqueue(
+        {
+          bookmarkId: this.bookmark.id,
+          type: "delete",
+        },
+        {
+          groupId: this.ctx.user.id,
+        },
+      );
+    } catch (err) {
+      console.warn("Failed to enqueue embeddings delete:", err);
+    }
+
+    try {
+      const webhookService = new WebhooksService(this.ctx.db);
+      await webhookService.triggerWebhook(
+        this.bookmark.id,
+        "deleted",
+        this.bookmark.userId,
+        {
+          groupId: this.ctx.user.id,
+        },
+      );
+    } catch (err) {
+      console.warn("Failed to trigger delete webhook:", err);
+    }
+
     if ((deleted.rowCount ?? 0) > 0) {
-      await this.cleanupAssets();
+      try {
+        await this.cleanupAssets();
+      } catch (err) {
+        console.warn("Failed to cleanup assets:", err);
+      }
     }
   }
 }

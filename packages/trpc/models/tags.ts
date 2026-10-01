@@ -352,13 +352,17 @@ export class Tag {
       throw new TRPCError({ code: "NOT_FOUND" });
     }
 
-    await Promise.all(
-      affectedBookmarks.map(({ bookmarkId }) =>
-        triggerSearchReindex(bookmarkId, {
-          groupId: this.ctx.user.id,
-        }),
-      ),
-    );
+    try {
+      await Promise.all(
+        affectedBookmarks.map(({ bookmarkId }) =>
+          triggerSearchReindex(bookmarkId, {
+            groupId: this.ctx.user.id,
+          }),
+        ),
+      );
+    } catch (err) {
+      console.warn("Failed to trigger search reindex on tag delete:", err);
+    }
   }
 
   async update(input: z.infer<typeof zUpdateTagRequestSchema>): Promise<void> {

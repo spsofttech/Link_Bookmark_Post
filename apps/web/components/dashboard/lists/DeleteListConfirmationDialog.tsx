@@ -36,10 +36,10 @@ export default function DeleteListConfirmationDialog({
         router.push("/dashboard/lists");
       }
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: `Something went wrong`,
+        description: err?.message || "Failed to delete list",
       });
     },
   });

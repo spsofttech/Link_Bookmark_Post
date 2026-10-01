@@ -25,10 +25,10 @@ export default function DeleteTagConfirmationDialog({
         router.push("/dashboard/tags");
       }
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: `Something went wrong`,
+        description: err?.message || "Failed to delete tag",
       });
     },
   });

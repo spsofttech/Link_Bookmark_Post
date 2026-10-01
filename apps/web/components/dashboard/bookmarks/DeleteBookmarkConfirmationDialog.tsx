@@ -32,10 +32,10 @@ export default function DeleteBookmarkConfirmationDialog({
         router.push("/dashboard/bookmarks");
       }
     },
-    onError: () => {
+    onError: (err) => {
       toast({
         variant: "destructive",
-        description: `Something went wrong`,
+        description: err?.message || "Failed to delete bookmark",
       });
     },
   });
