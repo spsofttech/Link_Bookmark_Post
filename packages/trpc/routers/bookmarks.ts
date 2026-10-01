@@ -3,6 +3,7 @@ import { experimental_trpcMiddleware, TRPCError } from "@trpc/server";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   exists,
@@ -2285,5 +2286,53 @@ Author: ${bookmark.author ?? ""}
         bookmarkId: input.bookmarkId,
         summary: summary.response,
       };
+    }),
+
+  /**
+   * Returns real total counts from Supabase for the sidebar menu:
+   *   - total: total bookmarks owned by the user
+   *   - perTag: map of tagName -> count
+   * This is a cheap aggregation query, NOT paginated, so the sidebar
+   * always shows the true numbers regardless of how many pages are loaded.
+   */
+  getBookmarkCounts: bookmarksProcedure
+    .output(
+      z.object({
+        total: z.number(),
+        perTag: z.array(z.object({ tagName: z.string(), count: z.number() })),
+      }),
+    )
+    .query(async ({ ctx }) => {
+      // Total bookmark count for the user (efficient single COUNT query)
+      const totalResult = await ctx.db
+        .select({ count: count(bookmarks.id) })
+        .from(bookmarks)
+        .where(eq(bookmarks.userId, ctx.user.id));
+
+      const total = totalResult[0]?.count ?? 0;
+
+      // Per-tag counts: join tagsOnBookmarks -> bookmarkTags
+      const tagCountRows = await ctx.db
+        .select({
+          tagName: bookmarkTags.name,
+          bookmarkId: tagsOnBookmarks.bookmarkId,
+        })
+        .from(tagsOnBookmarks)
+        .innerJoin(bookmarkTags, eq(bookmarkTags.id, tagsOnBookmarks.tagId))
+        .innerJoin(bookmarks, eq(bookmarks.id, tagsOnBookmarks.bookmarkId))
+        .where(eq(bookmarks.userId, ctx.user.id));
+
+      // Aggregate per-tag counts in JS
+      const tagCountMap = new Map<string, number>();
+      for (const row of tagCountRows) {
+        const name = row.tagName.toLowerCase();
+        tagCountMap.set(name, (tagCountMap.get(name) ?? 0) + 1);
+      }
+
+      const perTag = Array.from(tagCountMap.entries()).map(
+        ([tagName, count]) => ({ tagName, count }),
+      );
+
+      return { total, perTag };
     }),
 });

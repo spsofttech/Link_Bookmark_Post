@@ -44,6 +44,8 @@ import {
   getBookmarkTitle,
   getSourceUrl,
 } from "@karakeep/shared/utils/bookmarkUtils";
+import { useTRPC } from "@karakeep/shared-react/trpc";
+import { useQuery } from "@tanstack/react-query";
 import EditorCard from "../bookmarks/EditorCard";
 import BookmarkOptions from "../bookmarks/BookmarkOptions";
 
@@ -267,8 +269,17 @@ export default function BookmarksDirectoryView({
   const scrollSentinelRef = useRef<HTMLDivElement | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Real Supabase counts (fetched once, not paginated) ────────────────────
+  const api = useTRPC();
+  const { data: dbCounts } = useQuery(
+    api.bookmarks.getBookmarkCounts.queryOptions(undefined, {
+      staleTime: 30_000, // refresh every 30 s
+    }),
+  );
+
   // Real category counts calculation from actual user bookmarks
   const categoryStats = useMemo(() => {
+    // Start with client-side counts from loaded bookmarks
     const stats: Record<string, number> = {
       all: bookmarks.length,
       skills: 0,
@@ -345,8 +356,64 @@ export default function BookmarksDirectoryView({
         stats["product-tool"]++;
     }
 
+    // ── Override with real Supabase counts when available ──────────────────
+    // dbCounts.total is the authoritative total from the database.
+    // dbCounts.perTag maps exact tag names to per-tag totals.
+    if (dbCounts) {
+      stats.all = dbCounts.total;
+
+      // Build a quick lookup: tagName (lowercased) → count
+      const dbTagMap = new Map<string, number>();
+      for (const { tagName, count } of dbCounts.perTag) {
+        dbTagMap.set(tagName.toLowerCase(), count);
+      }
+
+      // For each sidebar category, sum all matching tag-name counts from DB.
+      // We take the MAX of the local heuristic count and the DB tag count so
+      // the number never goes *down* if tags are mis-spelled or missing.
+      const dbMax = (keys: string[]) =>
+        keys.reduce((acc, k) => acc + (dbTagMap.get(k) ?? 0), 0);
+
+      stats.skills = Math.max(stats.skills, dbMax(["skills", "skill"]));
+      stats.agents = Math.max(stats.agents, dbMax(["agents", "agent"]));
+      stats.commands = Math.max(stats.commands, dbMax(["commands", "command"]));
+      stats["share-image"] = Math.max(
+        stats["share-image"],
+        dbMax(["share image", "share-image", "image"]),
+      );
+      stats["code-tech"] = Math.max(
+        stats["code-tech"],
+        dbMax(["code & tech", "code-tech", "code", "tech"]),
+      );
+      stats.video = Math.max(stats.video, dbMax(["video"]));
+      stats["article-blog"] = Math.max(
+        stats["article-blog"],
+        dbMax(["article & blog", "article-blog", "article", "blog"]),
+      );
+      stats["social-thread"] = Math.max(
+        stats["social-thread"],
+        dbMax(["social & thread", "social-thread", "social", "thread"]),
+      );
+      stats["audio-podcast"] = Math.max(
+        stats["audio-podcast"],
+        dbMax(["audio & podcast", "audio-podcast", "audio", "podcast"]),
+      );
+      stats["document-pdf"] = Math.max(
+        stats["document-pdf"],
+        dbMax(["document & pdf", "document-pdf", "document", "pdf"]),
+      );
+      stats["product-tool"] = Math.max(
+        stats["product-tool"],
+        dbMax(["product & tool", "product-tool", "product", "tool"]),
+      );
+      stats.hooks = Math.max(stats.hooks, dbMax(["hooks", "hook"]));
+      stats.mcps = Math.max(stats.mcps, dbMax(["mcps", "mcp"]));
+      stats.mods = Math.max(stats.mods, dbMax(["mods", "mod"]));
+      stats.plugins = Math.max(stats.plugins, dbMax(["plugins", "plugin"]));
+    }
+
     return stats;
-  }, [bookmarks]);
+  }, [bookmarks, dbCounts]);
 
   const categories: CategoryDef[] = useMemo(
     () => [
@@ -633,11 +700,19 @@ export default function BookmarksDirectoryView({
                 )}
                 {showSidebar && (
                   <span className="flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
-                    {isFetchingNextPage && (
-                      <Loader2 className="size-2.5 animate-spin" />
+                    {dbCounts ? (
+                      <span className="font-semibold text-foreground">
+                        {dbCounts.total}
+                      </span>
+                    ) : (
+                      <>
+                        {isFetchingNextPage && (
+                          <Loader2 className="size-2.5 animate-spin" />
+                        )}
+                        {categoryStats.all}
+                        {hasNextPage ? "+" : ""}
+                      </>
                     )}
-                    {categoryStats.all}
-                    {hasNextPage ? "+" : ""}
                   </span>
                 )}
               </button>
@@ -988,21 +1063,25 @@ export default function BookmarksDirectoryView({
               {isFetchingNextPage ? (
                 <span className="flex items-center gap-1.5">
                   <Loader2 className="size-3 animate-spin" />
-                  Loading all data from Supabase… ({bookmarks.length} loaded so
-                  far)
+                  Loading… {bookmarks.length}
+                  {dbCounts ? ` of ${dbCounts.total}` : ""} loaded
                 </span>
               ) : (
                 <span>
-                  {filteredBookmarks.length} of {bookmarks.length} total
-                  components
-                  {activeCategory !== "all" || searchQuery ? " (filtered)" : ""}
+                  {filteredBookmarks.length}
+                  {activeCategory !== "all" || searchQuery
+                    ? " filtered"
+                    : ""}{" "}
+                  of{" "}
+                  <span className="font-semibold text-foreground">
+                    {dbCounts?.total ?? bookmarks.length}
+                  </span>{" "}
+                  total in Supabase
                 </span>
               )}
             </span>
             {hasNextPage && !isFetchingNextPage && (
-              <span className="text-[10px] text-amber-500">
-                Fetching more from database…
-              </span>
+              <span className="text-[10px] text-amber-500">Fetching more…</span>
             )}
           </div>
 
