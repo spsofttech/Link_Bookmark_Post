@@ -148,18 +148,75 @@ export const ensureBookmarkAccess = experimental_trpcMiddleware<{
   });
 });
 
+export function normalizeUrlKey(url?: string | null): string {
+  if (!url) return "";
+  let cleaned = url.trim();
+  try {
+    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+      cleaned = "https://" + cleaned;
+    }
+    const parsed = new URL(cleaned);
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.protocol}//${host}${pathname}${parsed.search}`;
+  } catch {
+    return cleaned.toLowerCase().replace(/\/+$/, "");
+  }
+}
+
+export function normalizeTextKey(text?: string | null): string {
+  if (!text) return "";
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 async function attemptToDedupLink(ctx: AuthedContext, url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  const normalized = normalizeUrlKey(trimmed);
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  const withTrailingSlash = withoutTrailingSlash + "/";
+
   const result = await ctx.db
     .select({
       id: bookmarkLinks.id,
+      url: bookmarkLinks.url,
     })
     .from(bookmarkLinks)
-    .leftJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
-    .where(and(eq(bookmarkLinks.url, url), eq(bookmarks.userId, ctx.user.id)));
+    .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
+    .where(
+      and(
+        eq(bookmarks.userId, ctx.user.id),
+        or(
+          eq(bookmarkLinks.url, trimmed),
+          eq(bookmarkLinks.url, withoutTrailingSlash),
+          eq(bookmarkLinks.url, withTrailingSlash),
+          eq(bookmarkLinks.url, normalized),
+        ),
+      ),
+    );
 
-  if (result.length == 0) {
+  if (result.length === 0) {
+    const allUserLinks = await ctx.db
+      .select({
+        id: bookmarkLinks.id,
+        url: bookmarkLinks.url,
+      })
+      .from(bookmarkLinks)
+      .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
+      .where(eq(bookmarks.userId, ctx.user.id));
+
+    const matched = allUserLinks.find(
+      (l) => normalizeUrlKey(l.url) === normalized,
+    );
+    if (matched) {
+      return (
+        await Bookmark.fromId(ctx, matched.id, /* includeContent: */ false)
+      ).asZBookmark();
+    }
     return null;
   }
+
   return (
     await Bookmark.fromId(ctx, result[0].id, /* includeContent: */ false)
   ).asZBookmark();
@@ -168,19 +225,41 @@ async function attemptToDedupLink(ctx: AuthedContext, url: string) {
 async function attemptToDedupText(ctx: AuthedContext, textContent: string) {
   const trimmed = textContent.trim();
   if (!trimmed) return null;
+  const norm = normalizeTextKey(trimmed);
+
   const result = await ctx.db
     .select({
       id: bookmarkTexts.id,
+      text: bookmarkTexts.text,
     })
     .from(bookmarkTexts)
-    .leftJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
+    .innerJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
     .where(
-      and(eq(bookmarkTexts.text, trimmed), eq(bookmarks.userId, ctx.user.id)),
+      and(
+        eq(bookmarks.userId, ctx.user.id),
+        or(eq(bookmarkTexts.text, trimmed), eq(bookmarkTexts.text, norm)),
+      ),
     );
 
   if (result.length === 0) {
+    const allUserTexts = await ctx.db
+      .select({
+        id: bookmarkTexts.id,
+        text: bookmarkTexts.text,
+      })
+      .from(bookmarkTexts)
+      .innerJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
+      .where(eq(bookmarks.userId, ctx.user.id));
+
+    const matched = allUserTexts.find((t) => normalizeTextKey(t.text) === norm);
+    if (matched) {
+      return (
+        await Bookmark.fromId(ctx, matched.id, /* includeContent: */ false)
+      ).asZBookmark();
+    }
     return null;
   }
+
   return (
     await Bookmark.fromId(ctx, result[0].id, /* includeContent: */ false)
   ).asZBookmark();
@@ -346,15 +425,31 @@ export const bookmarksAppRouter = router({
         }
       }
 
-      // 2. Fetch existing URLs for this user
+      // 2. Fetch existing URLs and Text bookmarks for this user
       const existingUrls = await ctx.db
-        .select({ url: bookmarkLinks.url })
+        .select({ id: bookmarkLinks.id, url: bookmarkLinks.url })
         .from(bookmarkLinks)
         .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
         .where(eq(bookmarks.userId, userId));
-      const existingUrlSet = new Set(
-        existingUrls.map((l) => l.url.trim().toLowerCase()),
-      );
+      const urlToBookmarkIdMap = new Map<string, string>();
+      for (const l of existingUrls) {
+        if (l.url) {
+          urlToBookmarkIdMap.set(normalizeUrlKey(l.url), l.id);
+          urlToBookmarkIdMap.set(l.url.trim().toLowerCase(), l.id);
+        }
+      }
+
+      const existingTexts = await ctx.db
+        .select({ id: bookmarkTexts.id, text: bookmarkTexts.text })
+        .from(bookmarkTexts)
+        .innerJoin(bookmarks, eq(bookmarks.id, bookmarkTexts.id))
+        .where(eq(bookmarks.userId, userId));
+      const textToBookmarkIdMap = new Map<string, string>();
+      for (const t of existingTexts) {
+        if (t.text) {
+          textToBookmarkIdMap.set(normalizeTextKey(t.text), t.id);
+        }
+      }
 
       // 3. Cache existing tags for this user
       const existingTags = await ctx.db.query.bookmarkTags.findMany({
@@ -405,58 +500,104 @@ export const bookmarksAppRouter = router({
             }
 
             const isLink = item.type !== "text" && Boolean(finalUrl);
-            const createdAt = item.sourceAddedAt ?? new Date();
-            const cleanTitle = (item.title || finalUrl || "Untitled")
-              .trim()
-              .split("\n")[0]
-              .slice(0, 200);
+            const normUrlKey = isLink ? normalizeUrlKey(finalUrl) : "";
+            const rawTextContent =
+              item.content || item.note || item.title || "";
+            const normTextKey = !isLink ? normalizeTextKey(rawTextContent) : "";
 
-            const [createdBookmark] = await tx
-              .insert(bookmarks)
-              .values({
-                userId,
-                title: cleanTitle,
-                type: isLink ? BookmarkTypes.LINK : BookmarkTypes.TEXT,
-                note: item.note || undefined,
-                createdAt,
-                modifiedAt: createdAt,
-                source: "import",
-                taggingStatus: "success",
-                archived: item.archived ?? false,
-                favourited: item.favourited ?? false,
-              })
-              .returning();
+            let targetBookmarkId: string | null = null;
+            let isDuplicate = false;
 
-            if (!createdBookmark) {
+            if (isLink) {
+              if (urlToBookmarkIdMap.has(normUrlKey)) {
+                targetBookmarkId = urlToBookmarkIdMap.get(normUrlKey)!;
+                isDuplicate = true;
+              } else if (
+                urlToBookmarkIdMap.has(finalUrl.trim().toLowerCase())
+              ) {
+                targetBookmarkId = urlToBookmarkIdMap.get(
+                  finalUrl.trim().toLowerCase(),
+                )!;
+                isDuplicate = true;
+              }
+            } else if (normTextKey) {
+              if (textToBookmarkIdMap.has(normTextKey)) {
+                targetBookmarkId = textToBookmarkIdMap.get(normTextKey)!;
+                isDuplicate = true;
+              }
+            }
+
+            if (isDuplicate && targetBookmarkId) {
               skippedCount++;
+            } else {
+              const createdAt = item.sourceAddedAt ?? new Date();
+              const cleanTitle = (item.title || finalUrl || "Untitled")
+                .trim()
+                .split("\n")[0]
+                .slice(0, 200);
+
+              const [createdBookmark] = await tx
+                .insert(bookmarks)
+                .values({
+                  userId,
+                  title: cleanTitle,
+                  type: isLink ? BookmarkTypes.LINK : BookmarkTypes.TEXT,
+                  note: item.note || undefined,
+                  createdAt,
+                  modifiedAt: createdAt,
+                  source: "import",
+                  taggingStatus: "success",
+                  archived: item.archived ?? false,
+                  favourited: item.favourited ?? false,
+                })
+                .returning();
+
+              if (!createdBookmark) {
+                skippedCount++;
+                continue;
+              }
+
+              targetBookmarkId = createdBookmark.id;
+
+              if (isLink && finalUrl) {
+                await tx
+                  .insert(bookmarkLinks)
+                  .values({
+                    id: createdBookmark.id,
+                    url: finalUrl,
+                    title: cleanTitle,
+                    description: item.description || item.note || undefined,
+                    imageUrl: item.imageUrl || undefined,
+                    crawlStatus: "pending",
+                    crawlStatusCode: 200,
+                  })
+                  .onConflictDoNothing();
+                urlToBookmarkIdMap.set(normUrlKey, createdBookmark.id);
+                urlToBookmarkIdMap.set(
+                  finalUrl.trim().toLowerCase(),
+                  createdBookmark.id,
+                );
+              } else {
+                await tx
+                  .insert(bookmarkTexts)
+                  .values({
+                    id: createdBookmark.id,
+                    text: rawTextContent || cleanTitle,
+                  })
+                  .onConflictDoNothing();
+                if (normTextKey) {
+                  textToBookmarkIdMap.set(normTextKey, createdBookmark.id);
+                }
+              }
+
+              importedCount++;
+            }
+
+            if (!targetBookmarkId) {
               continue;
             }
 
-            if (isLink && finalUrl) {
-              await tx
-                .insert(bookmarkLinks)
-                .values({
-                  id: createdBookmark.id,
-                  url: finalUrl,
-                  title: cleanTitle,
-                  description: item.description || item.note || undefined,
-                  imageUrl: item.imageUrl || undefined,
-                  crawlStatus: "pending",
-                  crawlStatusCode: 200,
-                })
-                .onConflictDoNothing();
-              existingUrlSet.add(finalUrl.toLowerCase());
-            } else {
-              await tx
-                .insert(bookmarkTexts)
-                .values({
-                  id: createdBookmark.id,
-                  text: item.content || item.note || cleanTitle,
-                })
-                .onConflictDoNothing();
-            }
-
-            // Lists handling
+            // Lists handling (attach lists to targetBookmarkId)
             const targetListIds = new Set<string>();
             if (item.lists && item.lists.length > 0) {
               for (const listName of item.lists) {
@@ -526,7 +667,7 @@ export const bookmarksAppRouter = router({
                 await tx
                   .insert(bookmarksInLists)
                   .values({
-                    bookmarkId: createdBookmark.id,
+                    bookmarkId: targetBookmarkId,
                     listId,
                   })
                   .onConflictDoNothing();
@@ -535,6 +676,7 @@ export const bookmarksAppRouter = router({
               }
             }
 
+            // Tags handling (attach tags to targetBookmarkId)
             for (const tagName of item.tags) {
               const cleanTagName = tagName.trim();
               if (!cleanTagName) continue;
@@ -591,7 +733,7 @@ export const bookmarksAppRouter = router({
                   await tx
                     .insert(tagsOnBookmarks)
                     .values({
-                      bookmarkId: createdBookmark.id,
+                      bookmarkId: targetBookmarkId,
                       tagId,
                       attachedBy: "human",
                     })
@@ -601,8 +743,6 @@ export const bookmarksAppRouter = router({
                 }
               }
             }
-
-            importedCount++;
           }
         });
       }

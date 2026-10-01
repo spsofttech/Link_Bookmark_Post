@@ -707,7 +707,7 @@ export class User {
       [{ numLists }],
       [{ numHighlights }],
       bookmarksByType,
-      topDomains,
+      userLinks,
       [{ totalAssetSize }],
       assetsByType,
       [{ thisWeek }],
@@ -760,64 +760,14 @@ export class User {
         .where(eq(bookmarks.userId, this.user.id))
         .groupBy(bookmarks.type),
 
-      // Top domains
+      // User links for domain extraction
       this.ctx.db
         .select({
-          domain: sql<string>`CASE
-            WHEN ${bookmarkLinks.url} LIKE 'https://%' THEN
-              CASE
-                WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 9, INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') - 1)
-                ELSE
-                  SUBSTR(${bookmarkLinks.url}, 9)
-              END
-            WHEN ${bookmarkLinks.url} LIKE 'http://%' THEN
-              CASE
-                WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 8, INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') - 1)
-                ELSE
-                  SUBSTR(${bookmarkLinks.url}, 8)
-              END
-            ELSE
-              CASE
-                WHEN INSTR(${bookmarkLinks.url}, '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 1, INSTR(${bookmarkLinks.url}, '/') - 1)
-                ELSE
-                  ${bookmarkLinks.url}
-              END
-          END`,
-          count: count(),
+          url: bookmarkLinks.url,
         })
         .from(bookmarkLinks)
         .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
-        .where(eq(bookmarks.userId, this.user.id))
-        .groupBy(
-          sql`CASE
-          WHEN ${bookmarkLinks.url} LIKE 'https://%' THEN
-            CASE
-              WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 9, INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') - 1)
-              ELSE
-                SUBSTR(${bookmarkLinks.url}, 9)
-            END
-          WHEN ${bookmarkLinks.url} LIKE 'http://%' THEN
-            CASE
-              WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 8, INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') - 1)
-              ELSE
-                SUBSTR(${bookmarkLinks.url}, 8)
-            END
-          ELSE
-            CASE
-              WHEN INSTR(${bookmarkLinks.url}, '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 1, INSTR(${bookmarkLinks.url}, '/') - 1)
-              ELSE
-                ${bookmarkLinks.url}
-            END
-        END`,
-        )
-        .orderBy(desc(count()))
-        .limit(10),
+        .where(eq(bookmarks.userId, this.user.id)),
 
       // Total asset size
       this.ctx.db
@@ -937,6 +887,24 @@ export class User {
       count: dayCounts[i],
     }));
 
+    const domainCounts: Record<string, number> = {};
+    for (const { url } of userLinks) {
+      if (!url) continue;
+      try {
+        const u = url.startsWith("http") ? url : `https://${url}`;
+        const domain = new URL(u).hostname.replace(/^www\./i, "").toLowerCase();
+        if (domain) {
+          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const topDomains = Object.entries(domainCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([domain, count]) => ({ domain, count }));
+
     return {
       numBookmarks,
       numFavorites,
@@ -945,7 +913,7 @@ export class User {
       numLists,
       numHighlights,
       bookmarksByType: bookmarkTypeMap,
-      topDomains: topDomains.filter((d) => d.domain && d.domain.length > 0),
+      topDomains,
       totalAssetSize: totalAssetSize || 0,
       assetsByType,
       bookmarkingActivity: {
@@ -1011,7 +979,7 @@ export class User {
       [{ numHighlights }],
       firstBookmarkResult,
       bookmarksByType,
-      topDomains,
+      userLinks,
       topTags,
       bookmarksBySource,
       bookmarkTimestamps,
@@ -1093,64 +1061,14 @@ export class User {
         .where(yearFilter)
         .groupBy(bookmarks.type),
 
-      // Top 5 domains
+      // User links in year for domain extraction
       this.ctx.db
         .select({
-          domain: sql<string>`CASE
-            WHEN ${bookmarkLinks.url} LIKE 'https://%' THEN
-              CASE
-                WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 9, INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') - 1)
-                ELSE
-                  SUBSTR(${bookmarkLinks.url}, 9)
-              END
-            WHEN ${bookmarkLinks.url} LIKE 'http://%' THEN
-              CASE
-                WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 8, INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') - 1)
-                ELSE
-                  SUBSTR(${bookmarkLinks.url}, 8)
-              END
-            ELSE
-              CASE
-                WHEN INSTR(${bookmarkLinks.url}, '/') > 0 THEN
-                  SUBSTR(${bookmarkLinks.url}, 1, INSTR(${bookmarkLinks.url}, '/') - 1)
-                ELSE
-                  ${bookmarkLinks.url}
-              END
-          END`,
-          count: count(),
+          url: bookmarkLinks.url,
         })
         .from(bookmarkLinks)
         .innerJoin(bookmarks, eq(bookmarks.id, bookmarkLinks.id))
-        .where(yearFilter)
-        .groupBy(
-          sql`CASE
-          WHEN ${bookmarkLinks.url} LIKE 'https://%' THEN
-            CASE
-              WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 9, INSTR(SUBSTR(${bookmarkLinks.url}, 9), '/') - 1)
-              ELSE
-                SUBSTR(${bookmarkLinks.url}, 9)
-            END
-          WHEN ${bookmarkLinks.url} LIKE 'http://%' THEN
-            CASE
-              WHEN INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 8, INSTR(SUBSTR(${bookmarkLinks.url}, 8), '/') - 1)
-              ELSE
-                SUBSTR(${bookmarkLinks.url}, 8)
-            END
-          ELSE
-            CASE
-              WHEN INSTR(${bookmarkLinks.url}, '/') > 0 THEN
-                SUBSTR(${bookmarkLinks.url}, 1, INSTR(${bookmarkLinks.url}, '/') - 1)
-              ELSE
-                ${bookmarkLinks.url}
-            END
-        END`,
-        )
-        .orderBy(desc(count()))
-        .limit(5),
+        .where(yearFilter),
 
       // Top 5 tags (used in bookmarks created this year)
       this.ctx.db
@@ -1252,6 +1170,24 @@ export class User {
           }
         : null;
 
+    const domainCounts: Record<string, number> = {};
+    for (const { url } of userLinks) {
+      if (!url) continue;
+      try {
+        const u = url.startsWith("http") ? url : `https://${url}`;
+        const domain = new URL(u).hostname.replace(/^www\./i, "").toLowerCase();
+        if (domain) {
+          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const topDomains = Object.entries(domainCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([domain, count]) => ({ domain, count }));
+
     return {
       year,
       totalBookmarks: totalBookmarks || 0,
@@ -1262,7 +1198,7 @@ export class User {
       totalLists: numLists || 0,
       firstBookmark,
       mostActiveDay,
-      topDomains: topDomains.filter((d) => d.domain && d.domain.length > 0),
+      topDomains,
       topTags,
       bookmarksByType: bookmarkTypeMap,
       bookmarksBySource,
