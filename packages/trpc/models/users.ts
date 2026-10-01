@@ -906,25 +906,45 @@ export class User {
       .map(([domain, count]) => ({ domain, count }));
 
     return {
-      numBookmarks,
-      numFavorites,
-      numArchived,
-      numTags,
-      numLists,
-      numHighlights,
-      bookmarksByType: bookmarkTypeMap,
-      topDomains,
-      totalAssetSize: totalAssetSize || 0,
-      assetsByType,
-      bookmarkingActivity: {
-        thisWeek: thisWeek || 0,
-        thisMonth: thisMonth || 0,
-        thisYear: thisYear || 0,
-        byHour: hourlyActivity,
-        byDayOfWeek: dailyActivity,
+      numBookmarks: Number(numBookmarks) || 0,
+      numFavorites: Number(numFavorites) || 0,
+      numArchived: Number(numArchived) || 0,
+      numTags: Number(numTags) || 0,
+      numLists: Number(numLists) || 0,
+      numHighlights: Number(numHighlights) || 0,
+      bookmarksByType: {
+        link: Number(bookmarkTypeMap.link) || 0,
+        text: Number(bookmarkTypeMap.text) || 0,
+        asset: Number(bookmarkTypeMap.asset) || 0,
       },
-      tagUsage,
-      bookmarksBySource,
+      topDomains,
+      totalAssetSize: Number(totalAssetSize) || 0,
+      assetsByType: (assetsByType || []).map((a) => ({
+        type: a.type || "unknown",
+        count: Number(a.count) || 0,
+        totalSize: Number(a.totalSize) || 0,
+      })),
+      bookmarkingActivity: {
+        thisWeek: Number(thisWeek) || 0,
+        thisMonth: Number(thisMonth) || 0,
+        thisYear: Number(thisYear) || 0,
+        byHour: hourlyActivity.map((h) => ({
+          hour: h.hour,
+          count: Number(h.count) || 0,
+        })),
+        byDayOfWeek: dailyActivity.map((d) => ({
+          day: d.day,
+          count: Number(d.count) || 0,
+        })),
+      },
+      tagUsage: (tagUsage || []).map((t) => ({
+        name: t.name,
+        count: Number(t.count) || 0,
+      })),
+      bookmarksBySource: (bookmarksBySource || []).map((s) => ({
+        source: s.source,
+        count: Number(s.count) || 0,
+      })),
     };
   }
 
@@ -1190,21 +1210,34 @@ export class User {
 
     return {
       year,
-      totalBookmarks: totalBookmarks || 0,
-      totalFavorites: totalFavorites || 0,
-      totalArchived: totalArchived || 0,
-      totalHighlights: numHighlights || 0,
-      totalTags: numTags || 0,
-      totalLists: numLists || 0,
+      totalBookmarks: Number(totalBookmarks) || 0,
+      totalFavorites: Number(totalFavorites) || 0,
+      totalArchived: Number(totalArchived) || 0,
+      totalHighlights: Number(numHighlights) || 0,
+      totalTags: Number(numTags) || 0,
+      totalLists: Number(numLists) || 0,
       firstBookmark,
       mostActiveDay,
       topDomains,
-      topTags,
-      bookmarksByType: bookmarkTypeMap,
-      bookmarksBySource,
-      monthlyActivity,
-      peakHour,
-      peakDayOfWeek,
+      topTags: (topTags || []).map((t) => ({
+        name: t.name,
+        count: Number(t.count) || 0,
+      })),
+      bookmarksByType: {
+        link: Number(bookmarkTypeMap.link) || 0,
+        text: Number(bookmarkTypeMap.text) || 0,
+        asset: Number(bookmarkTypeMap.asset) || 0,
+      },
+      bookmarksBySource: (bookmarksBySource || []).map((s) => ({
+        source: s.source,
+        count: Number(s.count) || 0,
+      })),
+      monthlyActivity: monthlyActivity.map((m) => ({
+        month: m.month,
+        count: Number(m.count) || 0,
+      })),
+      peakHour: Number(peakHour) || 0,
+      peakDayOfWeek: Number(peakDayOfWeek) || 0,
     };
   }
 

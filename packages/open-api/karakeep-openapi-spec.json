@@ -3934,34 +3934,43 @@
                   "type": "object",
                   "properties": {
                     "numBookmarks": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "numFavorites": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "numArchived": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "numTags": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "numLists": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "numHighlights": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "bookmarksByType": {
                       "type": "object",
                       "properties": {
                         "link": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "text": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "asset": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -3979,7 +3988,8 @@
                             "type": "string"
                           },
                           "count": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -3990,7 +4000,8 @@
                       "maxItems": 10
                     },
                     "totalAssetSize": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "assetsByType": {
                       "type": "array",
@@ -4001,10 +4012,12 @@
                             "type": "string"
                           },
                           "count": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "totalSize": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -4018,13 +4031,16 @@
                       "type": "object",
                       "properties": {
                         "thisWeek": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "thisMonth": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "thisYear": {
-                          "type": "number"
+                          "type": "number",
+                          "nullable": true
                         },
                         "byHour": {
                           "type": "array",
@@ -4032,10 +4048,12 @@
                             "type": "object",
                             "properties": {
                               "hour": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "count": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -4050,10 +4068,12 @@
                             "type": "object",
                             "properties": {
                               "day": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "count": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -4080,7 +4100,8 @@
                             "type": "string"
                           },
                           "count": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -4111,7 +4132,8 @@
                             ]
                           },
                           "count": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [

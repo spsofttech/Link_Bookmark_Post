@@ -66,47 +66,47 @@ export const zWhoAmIResponseSchema = z.object({
 });
 
 export const zUserStatsResponseSchema = z.object({
-  numBookmarks: z.number(),
-  numFavorites: z.number(),
-  numArchived: z.number(),
-  numTags: z.number(),
-  numLists: z.number(),
-  numHighlights: z.number(),
+  numBookmarks: z.coerce.number(),
+  numFavorites: z.coerce.number(),
+  numArchived: z.coerce.number(),
+  numTags: z.coerce.number(),
+  numLists: z.coerce.number(),
+  numHighlights: z.coerce.number(),
   bookmarksByType: z.object({
-    link: z.number(),
-    text: z.number(),
-    asset: z.number(),
+    link: z.coerce.number(),
+    text: z.coerce.number(),
+    asset: z.coerce.number(),
   }),
   topDomains: z
     .array(
       z.object({
         domain: z.string(),
-        count: z.number(),
+        count: z.coerce.number(),
       }),
     )
     .max(10),
-  totalAssetSize: z.number(),
+  totalAssetSize: z.coerce.number(),
   assetsByType: z.array(
     z.object({
       type: z.string(),
-      count: z.number(),
-      totalSize: z.number(),
+      count: z.coerce.number(),
+      totalSize: z.coerce.number(),
     }),
   ),
   bookmarkingActivity: z.object({
-    thisWeek: z.number(),
-    thisMonth: z.number(),
-    thisYear: z.number(),
+    thisWeek: z.coerce.number(),
+    thisMonth: z.coerce.number(),
+    thisYear: z.coerce.number(),
     byHour: z.array(
       z.object({
-        hour: z.number(),
-        count: z.number(),
+        hour: z.coerce.number(),
+        count: z.coerce.number(),
       }),
     ),
     byDayOfWeek: z.array(
       z.object({
-        day: z.number(),
-        count: z.number(),
+        day: z.coerce.number(),
+        count: z.coerce.number(),
       }),
     ),
   }),
@@ -114,26 +114,26 @@ export const zUserStatsResponseSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        count: z.number(),
+        count: z.coerce.number(),
       }),
     )
     .max(10),
   bookmarksBySource: z.array(
     z.object({
       source: zBookmarkSourceSchema.nullable(),
-      count: z.number(),
+      count: z.coerce.number(),
     }),
   ),
 });
 
 export const zWrappedStatsResponseSchema = z.object({
-  year: z.number(),
-  totalBookmarks: z.number(),
-  totalFavorites: z.number(),
-  totalArchived: z.number(),
-  totalHighlights: z.number(),
-  totalTags: z.number(),
-  totalLists: z.number(),
+  year: z.coerce.number(),
+  totalBookmarks: z.coerce.number(),
+  totalFavorites: z.coerce.number(),
+  totalArchived: z.coerce.number(),
+  totalHighlights: z.coerce.number(),
+  totalTags: z.coerce.number(),
+  totalLists: z.coerce.number(),
 
   firstBookmark: z
     .object({
@@ -147,7 +147,7 @@ export const zWrappedStatsResponseSchema = z.object({
   mostActiveDay: z
     .object({
       date: z.string(),
-      count: z.number(),
+      count: z.coerce.number(),
     })
     .nullable(),
 
@@ -155,7 +155,7 @@ export const zWrappedStatsResponseSchema = z.object({
     .array(
       z.object({
         domain: z.string(),
-        count: z.number(),
+        count: z.coerce.number(),
       }),
     )
     .max(5),
@@ -164,33 +164,33 @@ export const zWrappedStatsResponseSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        count: z.number(),
+        count: z.coerce.number(),
       }),
     )
     .max(5),
 
   bookmarksByType: z.object({
-    link: z.number(),
-    text: z.number(),
-    asset: z.number(),
+    link: z.coerce.number(),
+    text: z.coerce.number(),
+    asset: z.coerce.number(),
   }),
 
   bookmarksBySource: z.array(
     z.object({
       source: zBookmarkSourceSchema.nullable(),
-      count: z.number(),
+      count: z.coerce.number(),
     }),
   ),
 
   monthlyActivity: z.array(
     z.object({
-      month: z.number(),
-      count: z.number(),
+      month: z.coerce.number(),
+      count: z.coerce.number(),
     }),
   ),
 
-  peakHour: z.number(),
-  peakDayOfWeek: z.number(),
+  peakHour: z.coerce.number(),
+  peakDayOfWeek: z.coerce.number(),
 });
 
 export const zReaderFontFamilySchema = z.enum(["serif", "sans", "mono"]);
