@@ -430,21 +430,27 @@ export const bookmarksAppRouter = router({
             }
 
             if (item.type === "link" && rawUrl) {
-              tx.insert(bookmarkLinks).values({
-                id: createdBookmark.id,
-                url: rawUrl,
-                title: cleanTitle,
-                description: item.description || undefined,
-                imageUrl: item.imageUrl || undefined,
-                crawlStatus: "pending",
-                crawlStatusCode: 200,
-              });
+              await tx
+                .insert(bookmarkLinks)
+                .values({
+                  id: createdBookmark.id,
+                  url: rawUrl,
+                  title: cleanTitle,
+                  description: item.description || undefined,
+                  imageUrl: item.imageUrl || undefined,
+                  crawlStatus: "pending",
+                  crawlStatusCode: 200,
+                })
+                .onConflictDoNothing();
               existingUrlSet.add(rawUrl.toLowerCase());
             } else {
-              await tx.insert(bookmarkTexts).values({
-                id: createdBookmark.id,
-                text: item.content || item.note || cleanTitle,
-              });
+              await tx
+                .insert(bookmarkTexts)
+                .values({
+                  id: createdBookmark.id,
+                  text: item.content || item.note || cleanTitle,
+                })
+                .onConflictDoNothing();
             }
 
             // Lists handling
@@ -456,18 +462,50 @@ export const bookmarksAppRouter = router({
                 const norm = cleanListName.toLowerCase();
                 let listId = listCache.get(norm);
                 if (!listId) {
-                  const [newList] = await tx
-                    .insert(bookmarkLists)
-                    .values({
-                      userId,
-                      name: cleanListName,
-                      icon: "📁",
-                      type: "manual",
-                    })
-                    .returning();
-                  if (newList) {
-                    listId = newList.id;
+                  const existingList = await tx.query.bookmarkLists.findFirst({
+                    where: and(
+                      eq(bookmarkLists.userId, userId),
+                      eq(bookmarkLists.name, cleanListName),
+                    ),
+                  });
+                  if (existingList) {
+                    listId = existingList.id;
+                  } else {
+                    try {
+                      const [newList] = await tx
+                        .insert(bookmarkLists)
+                        .values({
+                          userId,
+                          name: cleanListName,
+                          icon: "📁",
+                          type: "manual",
+                        })
+                        .onConflictDoNothing()
+                        .returning();
+                      if (newList) {
+                        listId = newList.id;
+                      } else {
+                        const found = await tx.query.bookmarkLists.findFirst({
+                          where: and(
+                            eq(bookmarkLists.userId, userId),
+                            eq(bookmarkLists.name, cleanListName),
+                          ),
+                        });
+                        if (found) listId = found.id;
+                      }
+                    } catch {
+                      const found = await tx.query.bookmarkLists.findFirst({
+                        where: and(
+                          eq(bookmarkLists.userId, userId),
+                          eq(bookmarkLists.name, cleanListName),
+                        ),
+                      });
+                      if (found) listId = found.id;
+                    }
+                  }
+                  if (listId) {
                     listCache.set(norm, listId);
+                    listCache.set(cleanListName.toLowerCase(), listId);
                   }
                 }
                 if (listId) {
@@ -481,10 +519,17 @@ export const bookmarksAppRouter = router({
             }
 
             for (const listId of targetListIds) {
-              await tx.insert(bookmarksInLists).values({
-                bookmarkId: createdBookmark.id,
-                listId,
-              });
+              try {
+                await tx
+                  .insert(bookmarksInLists)
+                  .values({
+                    bookmarkId: createdBookmark.id,
+                    listId,
+                  })
+                  .onConflictDoNothing();
+              } catch {
+                // Ignore duplicate
+              }
             }
 
             for (const tagName of item.tags) {
@@ -493,25 +538,64 @@ export const bookmarksAppRouter = router({
               const norm = cleanTagName.toLowerCase();
               let tagId = tagCache.get(norm);
               if (!tagId) {
-                const [newTag] = await tx
-                  .insert(bookmarkTags)
-                  .values({
-                    userId,
-                    name: cleanTagName,
-                  })
-                  .returning();
-                if (newTag) {
-                  tagId = newTag.id;
+                const existingInDb = await tx.query.bookmarkTags.findFirst({
+                  where: and(
+                    eq(bookmarkTags.userId, userId),
+                    eq(bookmarkTags.name, cleanTagName),
+                  ),
+                });
+                if (existingInDb) {
+                  tagId = existingInDb.id;
+                } else {
+                  try {
+                    const [newTag] = await tx
+                      .insert(bookmarkTags)
+                      .values({
+                        userId,
+                        name: cleanTagName,
+                      })
+                      .onConflictDoNothing()
+                      .returning();
+                    if (newTag) {
+                      tagId = newTag.id;
+                    } else {
+                      const found = await tx.query.bookmarkTags.findFirst({
+                        where: and(
+                          eq(bookmarkTags.userId, userId),
+                          eq(bookmarkTags.name, cleanTagName),
+                        ),
+                      });
+                      if (found) tagId = found.id;
+                    }
+                  } catch {
+                    const found = await tx.query.bookmarkTags.findFirst({
+                      where: and(
+                        eq(bookmarkTags.userId, userId),
+                        eq(bookmarkTags.name, cleanTagName),
+                      ),
+                    });
+                    if (found) tagId = found.id;
+                  }
+                }
+                if (tagId) {
                   tagCache.set(norm, tagId);
+                  tagCache.set(cleanTagName.toLowerCase(), tagId);
                 }
               }
 
               if (tagId) {
-                await tx.insert(tagsOnBookmarks).values({
-                  bookmarkId: createdBookmark.id,
-                  tagId,
-                  attachedBy: "human",
-                });
+                try {
+                  await tx
+                    .insert(tagsOnBookmarks)
+                    .values({
+                      bookmarkId: createdBookmark.id,
+                      tagId,
+                      attachedBy: "human",
+                    })
+                    .onConflictDoNothing();
+                } catch {
+                  // Ignore duplicate
+                }
               }
             }
 
@@ -519,13 +603,6 @@ export const bookmarksAppRouter = router({
           }
         });
       }
-
-      syncAllToSupabase().catch((err) => {
-        console.warn(
-          "Supabase import sync background error:",
-          err?.message || err,
-        );
-      });
 
       return {
         importedCount,
