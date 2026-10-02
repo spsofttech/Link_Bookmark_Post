@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Layers,
   Bot,
@@ -343,8 +343,8 @@ function transformBookmark(b: ZBookmark, index: number) {
   };
 }
 
-// ─── Twitter/X official oEmbed widget component ────────────────────────────
-function TwitterEmbedFrame({
+// ─── Twitter/X official oEmbed widget component (Memoized to prevent reload on scroll) ──────
+const TwitterEmbedFrame = memo(function TwitterEmbedFrame({
   url,
   tweetId: _tweetId,
 }: {
@@ -389,9 +389,9 @@ function TwitterEmbedFrame({
       />
     </div>
   );
-}
+});
 
-// ─── Open-in-new-tab fallback for platforms that block iframing ───────────
+// ─── Open-in-new-tab fallback ──────────────────────────────────────────────
 function PlatformOpenInTab({
   url,
   platformName,
@@ -425,6 +425,393 @@ function PlatformOpenInTab({
   );
 }
 
+// ─── Standalone Memoized Embed Modal (NO Reload on Parent Scroll) ─────────────
+interface EmbedItem {
+  title: string;
+  url: string;
+  platform: ReturnType<typeof getPlatformInfo>;
+}
+
+const EmbedModalDialog = memo(function EmbedModalDialog({
+  item,
+  onClose,
+}: {
+  item: EmbedItem;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md duration-200 animate-in fade-in">
+      <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        {/* Modal Header */}
+        <div className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                item.platform.color,
+              )}
+            >
+              {item.platform.name}
+            </span>
+            <h3 className="line-clamp-1 text-sm font-bold text-foreground">
+              {item.title}
+            </h3>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              <span>Open Original Link</span>
+              <ExternalLink className="size-3.5" />
+            </a>
+            <button
+              onClick={onClose}
+              className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body: Live Embed Frame */}
+        <div className="relative flex-1 bg-black/90">
+          {item.platform.type === "youtube" && item.platform.embedUrl ? (
+            <iframe
+              src={item.platform.embedUrl}
+              title={item.title}
+              className="h-full w-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : item.platform.type === "vimeo" && item.platform.embedUrl ? (
+            <iframe
+              src={item.platform.embedUrl}
+              title={item.title}
+              className="h-full w-full border-0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowFullScreen
+            />
+          ) : item.platform.type === "twitter" && item.platform.embedUrl ? (
+            <TwitterEmbedFrame
+              url={item.platform.embedUrl}
+              tweetId={item.platform.videoId}
+            />
+          ) : item.platform.type === "instagram" && item.platform.embedUrl ? (
+            <iframe
+              src={item.platform.embedUrl}
+              title={item.title}
+              className="h-full w-full border-0 bg-white"
+            />
+          ) : item.platform.type === "tiktok" && item.platform.embedUrl ? (
+            <iframe
+              src={item.platform.embedUrl}
+              title={item.title}
+              className="h-full w-full border-0 bg-black"
+            />
+          ) : item.platform.type === "audio" ? (
+            <div className="flex h-full flex-col items-center justify-center bg-black/95 p-8 text-center">
+              <div className="mb-6 flex size-20 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/20 text-purple-400 shadow-xl">
+                <Music className="size-10" />
+              </div>
+              <h4 className="mb-2 text-lg font-bold text-white">
+                {item.title}
+              </h4>
+              <p className="mb-6 max-w-md truncate text-xs text-gray-400">
+                {item.url}
+              </p>
+              {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
+              <audio
+                controls
+                autoPlay
+                src={item.url}
+                className="w-full max-w-md"
+              />
+            </div>
+          ) : item.platform.type === "videofile" ? (
+            <div className="flex h-full items-center justify-center bg-black p-4">
+              {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
+              <video
+                controls
+                autoPlay
+                src={item.url}
+                className="max-h-full max-w-full rounded-xl"
+              />
+            </div>
+          ) : item.platform.type === "image" ? (
+            <div className="flex h-full items-center justify-center bg-black/95 p-4">
+              {/* oxlint-disable-next-line eslint-plugin-next/no-img-element */}
+              <img
+                src={item.url}
+                alt={item.title}
+                className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+              />
+            </div>
+          ) : item.platform.type === "github" ? (
+            <PlatformOpenInTab
+              url={item.url}
+              platformName="GitHub"
+              icon="🐙"
+              note="GitHub security headers block embedded iFrames. Click below to view repo on GitHub."
+            />
+          ) : (
+            <div className="flex h-full w-full flex-col">
+              <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-500">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Sparkles className="size-3.5" />
+                  Live Web Preview — If website blocks framing, click Open
+                  Original Link.
+                </span>
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 font-bold underline hover:text-amber-400"
+                >
+                  Open in New Tab <ExternalLink className="size-3" />
+                </a>
+              </div>
+              <iframe
+                src={item.url}
+                title={item.title}
+                className="h-full w-full border-0 bg-white"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ─── Standalone Memoized Card Item (NO Reload / Re-render on Scroll) ──────────
+const BookmarkCardItem = memo(function BookmarkCardItem({
+  item,
+  isSelected,
+  currentCategoryIcon,
+  onToggleSelect,
+  onOpenEmbed,
+  onSingleDelete,
+  onSingleCategoryChange,
+}: {
+  item: ReturnType<typeof transformBookmark>;
+  isSelected: boolean;
+  currentCategoryIcon: React.ReactNode;
+  onToggleSelect: (id: string) => void;
+  onOpenEmbed: (item: EmbedItem) => void;
+  onSingleDelete: (id: string, title: string) => void;
+  onSingleCategoryChange: (
+    bookmark: ZBookmark,
+    tag: string,
+    name: string,
+  ) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card transition-all duration-200",
+        isSelected
+          ? "border-amber-500 ring-2 ring-amber-500/30 dark:border-amber-500"
+          : "border-border hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
+      )}
+    >
+      {/* Embedded Visual Preview Box */}
+      <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
+        {item.previewImage ? (
+          // oxlint-disable-next-line eslint-plugin-next/no-img-element
+          <img
+            src={item.previewImage}
+            alt={item.title}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              const target = e.currentTarget;
+              target.style.display = "none";
+              const fallback = target.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = "flex";
+            }}
+          />
+        ) : null}
+
+        {/* Fallback Graphic Box */}
+        <div
+          style={{
+            display: item.previewImage ? "none" : "flex",
+          }}
+          className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
+        >
+          <div className="flex items-center justify-between">
+            <span
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
+                item.platform.color,
+              )}
+            >
+              {item.platform.name}
+            </span>
+            <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+              {currentCategoryIcon}
+            </div>
+          </div>
+          <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
+            {item.url || item.summary}
+          </p>
+        </div>
+
+        {/* Selection Checkbox Overlay */}
+        <button
+          onClick={() => onToggleSelect(item.id)}
+          className={cn(
+            "absolute left-3 top-3 z-10 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
+            isSelected
+              ? "border-amber-500 bg-amber-500 text-white"
+              : "border-border/80 bg-background/80 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
+          )}
+          title={isSelected ? "Deselect item" : "Select item"}
+        >
+          {isSelected ? (
+            <CheckSquare className="size-4 fill-current" />
+          ) : (
+            <Square className="size-4" />
+          )}
+        </button>
+
+        {/* Live Interactive Embed Button Overlay */}
+        {item.url && (
+          <button
+            onClick={() =>
+              onOpenEmbed({
+                title: item.title,
+                url: item.url,
+                platform: item.platform,
+              })
+            }
+            className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+            title="Open interactive embed preview"
+          >
+            {item.platform.type === "youtube" ? (
+              <Play className="size-3 fill-current" />
+            ) : (
+              <Eye className="size-3" />
+            )}
+            <span>Embed Preview</span>
+          </button>
+        )}
+      </div>
+
+      {/* Card Main Content */}
+      <div className="space-y-3 p-4">
+        {/* Card Title & Icon */}
+        <div className="flex items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+            {currentCategoryIcon}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <a
+              href={item.url || "#"}
+              target={item.url ? "_blank" : "_self"}
+              rel="noreferrer"
+              className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+            >
+              {item.title}
+            </a>
+          </div>
+
+          {item.bookmark && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => onSingleDelete(item.id, item.title)}
+                className="flex size-7 items-center justify-center rounded-lg border border-border/50 text-muted-foreground opacity-0 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                title="Delete bookmark"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+              <BookmarkOptions bookmark={item.bookmark} />
+            </div>
+          )}
+        </div>
+
+        {/* Card Description */}
+        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+          {item.summary}
+        </p>
+      </div>
+
+      {/* Bottom Bar: 1-Click Category Dropdown + Link */}
+      <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
+        <div className="flex items-center gap-2 overflow-hidden">
+          {item.bookmark ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-foreground transition-all hover:border-amber-500 hover:text-amber-500">
+                  <Tag className="size-2.5 text-amber-500" />
+                  <span>{item.categoryTag}</span>
+                  <ChevronDown className="size-2.5 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="z-50 w-48">
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Change Category
+                </div>
+                <DropdownMenuSeparator />
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.id}
+                    onClick={() =>
+                      onSingleCategoryChange(item.bookmark!, opt.tag, opt.name)
+                    }
+                    className="flex cursor-pointer items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      {opt.icon}
+                      <span>{opt.name}</span>
+                    </div>
+                    {item.categoryTag.toLowerCase() ===
+                      opt.tag.toLowerCase() && (
+                      <Check className="size-3.5 text-amber-500" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {item.categoryTag}
+            </span>
+          )}
+
+          <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <Download className="size-2.5" />
+            <span>{item.statsCount.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {item.url ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+          >
+            <span className="max-w-[110px] truncate">
+              {item.url.replace(/^https?:\/\//, "")}
+            </span>
+            <ExternalLink className="size-3 shrink-0" />
+          </a>
+        ) : (
+          <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
+            <Plus className="size-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function BookmarksDirectoryView({
   bookmarks,
   _showEditorCard = true,
@@ -457,12 +844,18 @@ export default function BookmarksDirectoryView({
   // Client-side pagination (display chunks)
   const [displayPage, setDisplayPage] = useState<number>(1);
 
-  // Active Embed Preview Modal State (Requirement #4)
-  const [activeEmbedItem, setActiveEmbedItem] = useState<{
-    title: string;
-    url: string;
-    platform: ReturnType<typeof getPlatformInfo>;
-  } | null>(null);
+  // Active Embed Preview Modal State (Requirement #4 - Memoized to NOT reload on scroll)
+  const [activeEmbedItem, setActiveEmbedItem] = useState<EmbedItem | null>(
+    null,
+  );
+
+  const handleOpenEmbed = useCallback((item: EmbedItem) => {
+    setActiveEmbedItem(item);
+  }, []);
+
+  const handleCloseEmbed = useCallback(() => {
+    setActiveEmbedItem(null);
+  }, []);
 
   // Scroll sentinel ref for infinite scroll within the main area
   const scrollSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -845,7 +1238,7 @@ export default function BookmarksDirectoryView({
     [visibleBookmarks],
   );
 
-  // ── Multi-selection handlers (Requirement #2) ──────────────────────────────
+  // ── Multi-selection handlers ──────────────────────────────────────────────
   const toggleSelectBookmark = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -869,23 +1262,26 @@ export default function BookmarksDirectoryView({
     }
   }, [selectedIds.size, visibleBookmarks]);
 
-  // ── Single & Bulk Delete Actions with instant update & notification (Requirement #1 & #2) ──
-  const handleSingleDelete = async (bookmarkId: string, title: string) => {
-    try {
-      await deleteBookmarkMutation.mutateAsync({ bookmarkId });
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(bookmarkId);
-        return next;
-      });
-      await refreshWorkspace();
-      toast.success(`Deleted "${title}" successfully`);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to delete bookmark";
-      toast.error(msg);
-    }
-  };
+  // ── Single & Bulk Delete Actions with instant update & notification ──
+  const handleSingleDelete = useCallback(
+    async (bookmarkId: string, title: string) => {
+      try {
+        await deleteBookmarkMutation.mutateAsync({ bookmarkId });
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(bookmarkId);
+          return next;
+        });
+        await refreshWorkspace();
+        toast.success(`Deleted "${title}" successfully`);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to delete bookmark";
+        toast.error(msg);
+      }
+    },
+    [deleteBookmarkMutation, refreshWorkspace],
+  );
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -918,27 +1314,30 @@ export default function BookmarksDirectoryView({
     }
   };
 
-  // ── Single & Bulk Category Change Actions (Requirement #1 & #3) ───────────
-  const handleSingleCategoryChange = async (
-    bookmark: ZBookmark,
-    newCategoryTag: string,
-    newCategoryName: string,
-  ) => {
-    try {
-      const oldTagIds = (bookmark.tags ?? []).map((t) => ({ tagId: t.id }));
-      await updateTagsMutation.mutateAsync({
-        bookmarkId: bookmark.id,
-        attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
-        detach: oldTagIds,
-      });
-      await refreshWorkspace();
-      toast.success(`Moved bookmark to "${newCategoryName}"`);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to update category";
-      toast.error(msg);
-    }
-  };
+  // ── Single & Bulk Category Change Actions ───────────
+  const handleSingleCategoryChange = useCallback(
+    async (
+      bookmark: ZBookmark,
+      newCategoryTag: string,
+      newCategoryName: string,
+    ) => {
+      try {
+        const oldTagIds = (bookmark.tags ?? []).map((t) => ({ tagId: t.id }));
+        await updateTagsMutation.mutateAsync({
+          bookmarkId: bookmark.id,
+          attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+          detach: oldTagIds,
+        });
+        await refreshWorkspace();
+        toast.success(`Moved bookmark to "${newCategoryName}"`);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to update category";
+        toast.error(msg);
+      }
+    },
+    [updateTagsMutation, refreshWorkspace],
+  );
 
   const handleBulkCategoryChange = async (
     newCategoryTag: string,
@@ -1317,7 +1716,7 @@ export default function BookmarksDirectoryView({
           {/* Controls & Filter Bar */}
           <div className="shadow-xs flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card/60 p-3">
             <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
-              {/* Select All Checkbox Button (Requirement #2) */}
+              {/* Select All Checkbox Button */}
               <button
                 onClick={toggleSelectAll}
                 className={cn(
@@ -1394,7 +1793,7 @@ export default function BookmarksDirectoryView({
               </div>
             </div>
 
-            {/* Sort Dropdown (Defaulting to Newest - Requirement #5) */}
+            {/* Sort Dropdown (Defaulting to Newest) */}
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground">
                 Sort by
@@ -1484,224 +1883,18 @@ export default function BookmarksDirectoryView({
                   : "flex flex-col gap-3",
               )}
             >
-              {displayItems.map((item) => {
-                const isSelected = selectedIds.has(item.id);
-
-                return (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card transition-all duration-200",
-                      isSelected
-                        ? "border-amber-500 ring-2 ring-amber-500/30 dark:border-amber-500"
-                        : "border-border hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
-                    )}
-                  >
-                    {/* Embedded Visual Preview Box */}
-                    <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
-                      {item.previewImage ? (
-                        // oxlint-disable-next-line eslint-plugin-next/no-img-element
-                        <img
-                          src={item.previewImage}
-                          alt={item.title}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = "none";
-                            const fallback =
-                              target.nextElementSibling as HTMLElement | null;
-                            if (fallback) fallback.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
-
-                      {/* Fallback Graphic Box */}
-                      <div
-                        style={{
-                          display: item.previewImage ? "none" : "flex",
-                        }}
-                        className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span
-                            className={cn(
-                              "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
-                              item.platform.color,
-                            )}
-                          >
-                            {item.platform.name}
-                          </span>
-                          <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                            {currentCategoryObj.icon}
-                          </div>
-                        </div>
-                        <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
-                          {item.url || item.summary}
-                        </p>
-                      </div>
-
-                      {/* Selection Checkbox Overlay (Requirement #2) */}
-                      <button
-                        onClick={() => toggleSelectBookmark(item.id)}
-                        className={cn(
-                          "absolute left-3 top-3 z-10 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
-                          isSelected
-                            ? "border-amber-500 bg-amber-500 text-white"
-                            : "border-border/80 bg-background/80 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
-                        )}
-                        title={isSelected ? "Deselect item" : "Select item"}
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="size-4 fill-current" />
-                        ) : (
-                          <Square className="size-4" />
-                        )}
-                      </button>
-
-                      {/* Live Interactive Embed Button Overlay (Requirement #4) */}
-                      {item.url && (
-                        <button
-                          onClick={() =>
-                            setActiveEmbedItem({
-                              title: item.title,
-                              url: item.url,
-                              platform: item.platform,
-                            })
-                          }
-                          className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-                          title="Open interactive embed preview"
-                        >
-                          {item.platform.type === "youtube" ? (
-                            <Play className="size-3 fill-current" />
-                          ) : (
-                            <Eye className="size-3" />
-                          )}
-                          <span>Embed Preview</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Card Main Content */}
-                    <div className="space-y-3 p-4">
-                      {/* Card Title & Icon */}
-                      <div className="flex items-start gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                          {currentCategoryObj.icon}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <a
-                            href={item.url || "#"}
-                            target={item.url ? "_blank" : "_self"}
-                            rel="noreferrer"
-                            className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
-                          >
-                            {item.title}
-                          </a>
-                        </div>
-
-                        {item.bookmark && (
-                          <div className="flex items-center gap-1">
-                            {/* Quick Delete Button (Requirement #1) */}
-                            <button
-                              onClick={() =>
-                                handleSingleDelete(item.id, item.title)
-                              }
-                              className="flex size-7 items-center justify-center rounded-lg border border-border/50 text-muted-foreground opacity-0 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
-                              title="Delete bookmark"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                            <BookmarkOptions bookmark={item.bookmark} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card Description */}
-                      <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {item.summary}
-                      </p>
-                    </div>
-
-                    {/* Bottom Bar: 1-Click Category Dropdown (Requirement #3) + Link */}
-                    <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        {/* 1-Click Category Change Dropdown (Requirement #3) */}
-                        {item.bookmark ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-foreground transition-all hover:border-amber-500 hover:text-amber-500">
-                                <Tag className="size-2.5 text-amber-500" />
-                                <span>{item.categoryTag}</span>
-                                <ChevronDown className="size-2.5 opacity-60" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              className="z-50 w-48"
-                            >
-                              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Change Category
-                              </div>
-                              <DropdownMenuSeparator />
-                              {CATEGORY_OPTIONS.map((opt) => (
-                                <DropdownMenuItem
-                                  key={opt.id}
-                                  onClick={() =>
-                                    handleSingleCategoryChange(
-                                      item.bookmark!,
-                                      opt.tag,
-                                      opt.name,
-                                    )
-                                  }
-                                  className="flex cursor-pointer items-center justify-between text-xs"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {opt.icon}
-                                    <span>{opt.name}</span>
-                                  </div>
-                                  {item.categoryTag.toLowerCase() ===
-                                    opt.tag.toLowerCase() && (
-                                    <Check className="size-3.5 text-amber-500" />
-                                  )}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : (
-                          <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                            {item.categoryTag}
-                          </span>
-                        )}
-
-                        <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <Download className="size-2.5" />
-                          <span>{item.statsCount.toLocaleString()}</span>
-                        </div>
-                      </div>
-
-                      {/* Complete Working Link Action */}
-                      {item.url ? (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
-                        >
-                          <span className="max-w-[110px] truncate">
-                            {item.url.replace(/^https?:\/\//, "")}
-                          </span>
-                          <ExternalLink className="size-3 shrink-0" />
-                        </a>
-                      ) : (
-                        <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
-                          <Plus className="size-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {displayItems.map((item) => (
+                <BookmarkCardItem
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedIds.has(item.id)}
+                  currentCategoryIcon={currentCategoryObj.icon}
+                  onToggleSelect={toggleSelectBookmark}
+                  onOpenEmbed={handleOpenEmbed}
+                  onSingleDelete={handleSingleDelete}
+                  onSingleCategoryChange={handleSingleCategoryChange}
+                />
+              ))}
             </div>
           )}
 
@@ -1718,7 +1911,7 @@ export default function BookmarksDirectoryView({
         </main>
       </div>
 
-      {/* 3. Floating Bulk Action Toolbar (Requirement #2 & #3) */}
+      {/* 3. Floating Bulk Action Toolbar */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-500/40 bg-card/95 px-5 py-3 shadow-2xl backdrop-blur-xl duration-200 animate-in fade-in slide-in-from-bottom-5">
           <div className="flex items-center gap-2 border-r border-border pr-2">
@@ -1738,7 +1931,7 @@ export default function BookmarksDirectoryView({
               : "Select All"}
           </button>
 
-          {/* Move Category Dropdown (Requirement #3) */}
+          {/* Move Category Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -1769,7 +1962,7 @@ export default function BookmarksDirectoryView({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Delete Selected Button (Requirement #2) */}
+          {/* Delete Selected Button */}
           <button
             onClick={handleBulkDelete}
             disabled={isBulkProcessing}
@@ -1794,158 +1987,9 @@ export default function BookmarksDirectoryView({
         </div>
       )}
 
-      {/* 4. Live Interactive Embed Modal Dialog (Requirement #4) */}
+      {/* 4. Live Interactive Embed Modal Dialog (Memoized - NO Reload on Scroll) */}
       {activeEmbedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md duration-200 animate-in fade-in">
-          <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={cn(
-                    "rounded-md border px-2 py-0.5 text-xs font-semibold",
-                    activeEmbedItem.platform.color,
-                  )}
-                >
-                  {activeEmbedItem.platform.name}
-                </span>
-                <h3 className="line-clamp-1 text-sm font-bold text-foreground">
-                  {activeEmbedItem.title}
-                </h3>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <a
-                  href={activeEmbedItem.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-                >
-                  <span>Open Original Link</span>
-                  <ExternalLink className="size-3.5" />
-                </a>
-                <button
-                  onClick={() => setActiveEmbedItem(null)}
-                  className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body: Live Embed Frame & Media Handler */}
-            <div className="relative flex-1 bg-black/90">
-              {activeEmbedItem.platform.type === "youtube" &&
-              activeEmbedItem.platform.embedUrl ? (
-                <iframe
-                  src={activeEmbedItem.platform.embedUrl}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : activeEmbedItem.platform.type === "vimeo" &&
-                activeEmbedItem.platform.embedUrl ? (
-                <iframe
-                  src={activeEmbedItem.platform.embedUrl}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : activeEmbedItem.platform.type === "twitter" &&
-                activeEmbedItem.platform.embedUrl ? (
-                <TwitterEmbedFrame
-                  url={activeEmbedItem.platform.embedUrl}
-                  tweetId={activeEmbedItem.platform.videoId}
-                />
-              ) : activeEmbedItem.platform.type === "instagram" &&
-                activeEmbedItem.platform.embedUrl ? (
-                <iframe
-                  src={activeEmbedItem.platform.embedUrl}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0 bg-white"
-                />
-              ) : activeEmbedItem.platform.type === "tiktok" &&
-                activeEmbedItem.platform.embedUrl ? (
-                <iframe
-                  src={activeEmbedItem.platform.embedUrl}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0 bg-black"
-                />
-              ) : activeEmbedItem.platform.type === "audio" ? (
-                <div className="flex h-full flex-col items-center justify-center bg-black/95 p-8 text-center">
-                  <div className="mb-6 flex size-20 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/20 text-purple-400 shadow-xl">
-                    <Music className="size-10" />
-                  </div>
-                  <h4 className="mb-2 text-lg font-bold text-white">
-                    {activeEmbedItem.title}
-                  </h4>
-                  <p className="mb-6 max-w-md truncate text-xs text-gray-400">
-                    {activeEmbedItem.url}
-                  </p>
-                  {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
-                  <audio
-                    controls
-                    autoPlay
-                    src={activeEmbedItem.url}
-                    className="w-full max-w-md"
-                  />
-                </div>
-              ) : activeEmbedItem.platform.type === "videofile" ? (
-                <div className="flex h-full items-center justify-center bg-black p-4">
-                  {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
-                  <video
-                    controls
-                    autoPlay
-                    src={activeEmbedItem.url}
-                    className="max-h-full max-w-full rounded-xl"
-                  />
-                </div>
-              ) : activeEmbedItem.platform.type === "image" ? (
-                <div className="flex h-full items-center justify-center bg-black/95 p-4">
-                  {/* oxlint-disable-next-line eslint-plugin-next/no-img-element */}
-                  <img
-                    src={activeEmbedItem.url}
-                    alt={activeEmbedItem.title}
-                    className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-                  />
-                </div>
-              ) : activeEmbedItem.platform.type === "github" ? (
-                <PlatformOpenInTab
-                  url={activeEmbedItem.url}
-                  platformName="GitHub"
-                  icon="🐙"
-                  note="GitHub security headers block embedded iFrames. Click below to view repo on GitHub."
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col">
-                  <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-500">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Sparkles className="size-3.5" />
-                      Live Web Preview — If website blocks framing, click Open
-                      Original Link.
-                    </span>
-                    <a
-                      href={activeEmbedItem.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 font-bold underline hover:text-amber-400"
-                    >
-                      Open in New Tab <ExternalLink className="size-3" />
-                    </a>
-                  </div>
-                  <iframe
-                    src={activeEmbedItem.url}
-                    title={activeEmbedItem.title}
-                    className="h-full w-full border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <EmbedModalDialog item={activeEmbedItem} onClose={handleCloseEmbed} />
       )}
     </div>
   );
