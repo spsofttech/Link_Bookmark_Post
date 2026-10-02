@@ -7,10 +7,8 @@ const withBundleAnalyzer = bundleAnalyzer({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  experimental: {
-    outputFileTracingIncludes: {
-      "/**": ["./public/db.db", "./db.db"],
-    },
+  outputFileTracingIncludes: {
+    "/**": ["./public/db.db", "./db.db"],
   },
   turbopack: {
     rules: {
