@@ -2256,17 +2256,6 @@ export default function BookmarksDirectoryView({
               <span>Refresh</span>
             </button>
 
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              <Github className="size-3.5" />
-              <span>GitHub</span>
-              <span className="font-normal text-muted-foreground">★ 32.3k</span>
-            </a>
-
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted/30 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
