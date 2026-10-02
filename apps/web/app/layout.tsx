@@ -22,8 +22,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Karakeep",
-  applicationName: "Karakeep",
+  title: "Save Content",
+  applicationName: "Save Content",
   description:
     "The Bookmark Everything app. Hoard links, notes, and images and they will get automatically tagged AI.",
   icons: {
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Karakeep",
+    title: "Save Content",
   },
   formatDetection: {
     telephone: false,

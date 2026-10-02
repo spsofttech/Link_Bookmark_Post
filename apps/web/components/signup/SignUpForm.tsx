@@ -102,13 +102,13 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
       <CardHeader className="pb-4 pt-8 text-center">
         <div className="mx-auto mb-3 flex items-center justify-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
           <Sparkles className="size-3.5" />
-          <span>Join Karakeep Platform</span>
+          <span>Join Save Content Platform</span>
         </div>
         <CardTitle className="text-3xl font-extrabold tracking-tight text-white">
           Create Your Account
         </CardTitle>
         <CardDescription className="mt-1 text-sm text-slate-400">
-          Join Karakeep to start organizing your AI templates & bookmarks
+          Join Save Content to start organizing your AI templates & bookmarks
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 px-6 pb-8">

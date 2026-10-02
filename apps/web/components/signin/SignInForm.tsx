@@ -35,7 +35,7 @@ export default async function SignInForm() {
         <CardHeader className="pb-4 pt-8 text-center">
           <div className="mx-auto mb-3 flex items-center justify-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
             <Sparkles className="size-3.5" />
-            <span>Karakeep Workspace</span>
+            <span>Save Content Workspace</span>
           </div>
           <CardTitle className="text-3xl font-extrabold tracking-tight text-white">
             Welcome Back

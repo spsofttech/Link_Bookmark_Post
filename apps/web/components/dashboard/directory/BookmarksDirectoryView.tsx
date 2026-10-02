@@ -245,14 +245,15 @@ function getPlatformInfo(url: string | null | undefined) {
   }
 
   if (lower.includes("instagram.com")) {
-    const igMatch = url.match(/instagram\.com\/(?:p|reel)\/([^/?#&]+)/i);
+    const igMatch = url.match(/instagram\.com\/(?:p|reel|reels)\/([^/?#&]+)/i);
+    const postId = igMatch ? igMatch[1] : null;
     return {
       name: "Instagram",
       color: "bg-pink-500/10 text-pink-500 border-pink-500/20",
       type: "instagram",
-      videoId: igMatch ? igMatch[1] : null,
-      embedUrl: igMatch
-        ? `https://www.instagram.com/p/${igMatch[1]}/embed`
+      videoId: postId,
+      embedUrl: postId
+        ? `https://www.instagram.com/p/${postId}/embed/captioned/`
         : url,
     };
   }
@@ -479,6 +480,59 @@ function PlatformOpenInTab({
   );
 }
 
+// ─── Instagram Embed Frame (Guaranteed Zero Block Screen) ───────────────
+const InstagramEmbedFrame = memo(function InstagramEmbedFrame({
+  url,
+  embedUrl,
+  title,
+}: {
+  url: string;
+  embedUrl: string;
+  title: string;
+}) {
+  const [iframeFailed, setIframeFailed] = useState(false);
+
+  return (
+    <div className="flex h-full w-full flex-col bg-slate-950">
+      {/* Top Banner with Direct Link */}
+      <div className="flex items-center justify-between border-b border-pink-500/20 bg-pink-500/10 px-4 py-2 text-xs text-pink-400">
+        <span className="flex items-center gap-1.5 font-medium">
+          <Sparkles className="size-3.5" />
+          Instagram Live Post Viewer
+        </span>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 font-bold underline hover:text-pink-300"
+        >
+          Open Directly on Instagram <ExternalLink className="size-3" />
+        </a>
+      </div>
+
+      <div className="relative flex-1 overflow-hidden">
+        {!iframeFailed ? (
+          <iframe
+            src={embedUrl}
+            title={title}
+            onError={() => setIframeFailed(true)}
+            className="h-full w-full border-0 bg-white"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+          />
+        ) : (
+          <PlatformOpenInTab
+            url={url}
+            platformName="Instagram"
+            icon="📸"
+            note="Instagram security headers require opening directly. Click below to view post on Instagram."
+          />
+        )}
+      </div>
+    </div>
+  );
+});
+
 // ─── Standalone Memoized Embed Modal (NO Reload on Parent Scroll) ─────────────
 interface EmbedItem {
   title: string;
@@ -555,10 +609,10 @@ const EmbedModalDialog = memo(function EmbedModalDialog({
               tweetId={item.platform.videoId}
             />
           ) : item.platform.type === "instagram" && item.platform.embedUrl ? (
-            <iframe
-              src={item.platform.embedUrl}
+            <InstagramEmbedFrame
+              url={item.url}
+              embedUrl={item.platform.embedUrl}
               title={item.title}
-              className="h-full w-full border-0 bg-white"
             />
           ) : item.platform.type === "tiktok" && item.platform.embedUrl ? (
             <iframe
