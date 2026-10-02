@@ -12,7 +12,6 @@ import {
   MessageSquare,
   Wrench,
   Search,
-  SlidersHorizontal,
   Grid,
   List as ListIcon,
   Plus,
@@ -35,6 +34,15 @@ import {
   X,
   Play,
   Loader2,
+  CheckSquare,
+  Square,
+  Trash2,
+  FolderSync,
+  ChevronDown,
+  Check,
+  Music,
+  Tag,
+  RefreshCw,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -45,7 +53,19 @@ import {
   getSourceUrl,
 } from "@karakeep/shared/utils/bookmarkUtils";
 import { useTRPC } from "@karakeep/shared-react/trpc";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useDeleteBookmark,
+  useUpdateBookmarkTags,
+} from "@karakeep/shared-react/hooks/bookmarks";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import EditorCard from "../bookmarks/EditorCard";
 import BookmarkOptions from "../bookmarks/BookmarkOptions";
 
@@ -62,6 +82,57 @@ interface CategoryDef {
   tags: string[];
 }
 
+const CATEGORY_OPTIONS = [
+  {
+    id: "skills",
+    name: "Skills",
+    tag: "skills",
+    icon: <Layers className="size-3.5 text-amber-500" />,
+  },
+  {
+    id: "agents",
+    name: "Agents",
+    tag: "agents",
+    icon: <Bot className="size-3.5 text-blue-500" />,
+  },
+  {
+    id: "commands",
+    name: "Commands",
+    tag: "commands",
+    icon: <Terminal className="size-3.5 text-emerald-500" />,
+  },
+  {
+    id: "share-image",
+    name: "Share Image",
+    tag: "share image",
+    icon: <ImageIcon className="size-3.5 text-purple-500" />,
+  },
+  {
+    id: "code-tech",
+    name: "Code & Tech",
+    tag: "code & tech",
+    icon: <Code className="size-3.5 text-cyan-500" />,
+  },
+  {
+    id: "video",
+    name: "Video",
+    tag: "video",
+    icon: <Video className="size-3.5 text-red-500" />,
+  },
+  {
+    id: "article-blog",
+    name: "Article & Blog",
+    tag: "article & blog",
+    icon: <FileText className="size-3.5 text-amber-600" />,
+  },
+  {
+    id: "social-thread",
+    name: "Social & Thread",
+    tag: "social & thread",
+    icon: <MessageSquare className="size-3.5 text-sky-500" />,
+  },
+];
+
 function getPlatformInfo(url: string | null | undefined) {
   if (!url) {
     return {
@@ -75,6 +146,39 @@ function getPlatformInfo(url: string | null | undefined) {
 
   const lower = url.toLowerCase();
 
+  // Direct Audio File
+  if (/\.(mp3|wav|ogg|m4a|flac|aac)(\?.*)?$/i.test(lower)) {
+    return {
+      name: "Audio File",
+      color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+      type: "audio",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  // Direct Video File
+  if (/\.(mp4|webm|ogv|mov)(\?.*)?$/i.test(lower)) {
+    return {
+      name: "Video File",
+      color: "bg-red-500/10 text-red-500 border-red-500/20",
+      type: "videofile",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  // Direct Image File
+  if (/\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(lower)) {
+    return {
+      name: "Image Asset",
+      color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+      type: "image",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
   if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
     const ytMatch = url.match(
       /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([^"&?/\s]{11})/i,
@@ -85,13 +189,12 @@ function getPlatformInfo(url: string | null | undefined) {
       type: "youtube",
       videoId: ytMatch ? ytMatch[1] : null,
       embedUrl: ytMatch
-        ? `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`
+        ? `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&rel=0`
         : null,
     };
   }
 
   if (lower.includes("twitter.com") || lower.includes("x.com")) {
-    // Extract tweet ID for official oEmbed widget
     const tweetMatch = url.match(
       /(?:twitter|x)\.com\/(?:#!\/)?\w+\/status(?:es)?\/([\d]+)/i,
     );
@@ -100,7 +203,7 @@ function getPlatformInfo(url: string | null | undefined) {
       color: "bg-sky-500/10 text-sky-500 border-sky-500/20",
       type: "twitter",
       videoId: tweetMatch ? tweetMatch[1] : null,
-      embedUrl: tweetMatch ? url : null, // pass original URL for widget
+      embedUrl: tweetMatch ? url : null,
     };
   }
 
@@ -123,7 +226,7 @@ function getPlatformInfo(url: string | null | undefined) {
       color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
       type: "github",
       videoId: null,
-      embedUrl: null, // GitHub blocks all iframes (X-Frame-Options: deny)
+      embedUrl: null,
     };
   }
 
@@ -148,12 +251,15 @@ function getPlatformInfo(url: string | null | undefined) {
   }
 
   if (lower.includes("tiktok.com")) {
+    const tiktokMatch = url.match(/video\/(\d+)/i);
     return {
       name: "TikTok",
       color: "bg-pink-600/10 text-pink-600 border-pink-600/20",
       type: "tiktok",
-      videoId: null,
-      embedUrl: url,
+      videoId: tiktokMatch ? tiktokMatch[1] : null,
+      embedUrl: tiktokMatch
+        ? `https://www.tiktok.com/embed/v2/${tiktokMatch[1]}`
+        : url,
     };
   }
 
@@ -165,7 +271,7 @@ function getPlatformInfo(url: string | null | undefined) {
       type: "vimeo",
       videoId: vimeoMatch ? vimeoMatch[1] : null,
       embedUrl: vimeoMatch
-        ? `https://player.vimeo.com/video/${vimeoMatch[1]}`
+        ? `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`
         : url,
     };
   }
@@ -200,7 +306,7 @@ function getPlatformInfo(url: string | null | undefined) {
   }
 }
 
-// ─── Single card transform (memoized per bookmark) ───────────────────────────
+// ─── Single card transform ───────────────────────────────────────────────────
 function transformBookmark(b: ZBookmark, index: number) {
   const title = getBookmarkTitle(b) || "Untitled Post";
   const summary =
@@ -225,7 +331,7 @@ function transformBookmark(b: ZBookmark, index: number) {
 
   return {
     id: b.id,
-    bookmark: b as ZBookmark | null,
+    bookmark: b,
     title,
     summary,
     categoryTag,
@@ -238,10 +344,6 @@ function transformBookmark(b: ZBookmark, index: number) {
 }
 
 // ─── Twitter/X official oEmbed widget component ────────────────────────────
-// X blocks all third-party embeds (twitframe, etc.) with X-Frame-Options.
-// The only working solution is loading the official widgets.js script.
-// We do that inside a blob: iframe so the script can run safely without
-// affecting our app's CSP.
 function TwitterEmbedFrame({
   url,
   tweetId: _tweetId,
@@ -340,15 +442,22 @@ export default function BookmarksDirectoryView({
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  // DEFAULT SORT BY NEWEST (Requirement #5)
   const [sortBy, setSortBy] = useState<
     "popular" | "newest" | "oldest" | "alphabetical"
-  >("popular");
+  >("newest");
+
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
+
+  // Multi-Selection State (Requirement #2)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState<boolean>(false);
 
   // Client-side pagination (display chunks)
   const [displayPage, setDisplayPage] = useState<number>(1);
 
-  // Active Embed Preview Modal State
+  // Active Embed Preview Modal State (Requirement #4)
   const [activeEmbedItem, setActiveEmbedItem] = useState<{
     title: string;
     url: string;
@@ -359,17 +468,32 @@ export default function BookmarksDirectoryView({
   const scrollSentinelRef = useRef<HTMLDivElement | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
 
-  // ── Real Supabase counts (fetched once, not paginated) ────────────────────
+  const queryClient = useQueryClient();
   const api = useTRPC();
+  const deleteBookmarkMutation = useDeleteBookmark();
+  const updateTagsMutation = useUpdateBookmarkTags();
+
+  // Helper for immediate UI update & toast notification after CRUD (Requirement #1)
+  const refreshWorkspace = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries(api.bookmarks.getBookmarks.pathFilter()),
+      queryClient.invalidateQueries(
+        api.bookmarks.getBookmarkCounts.pathFilter(),
+      ),
+      queryClient.invalidateQueries(api.bookmarks.searchBookmarks.pathFilter()),
+      queryClient.refetchQueries(api.bookmarks.getBookmarks.pathFilter()),
+    ]);
+  }, [api, queryClient]);
+
+  // ── Real Supabase counts (fetched once, not paginated) ────────────────────
   const { data: dbCounts } = useQuery(
     api.bookmarks.getBookmarkCounts.queryOptions(undefined, {
-      staleTime: 30_000, // refresh every 30 s
+      staleTime: 30_000,
     }),
   );
 
-  // Real category counts calculation from actual user bookmarks
+  // Category stats calculation
   const categoryStats = useMemo(() => {
-    // Start with client-side counts from loaded bookmarks
     const stats: Record<string, number> = {
       all: bookmarks.length,
       skills: 0,
@@ -446,21 +570,12 @@ export default function BookmarksDirectoryView({
         stats["product-tool"]++;
     }
 
-    // ── Override with real Supabase counts when available ──────────────────
-    // dbCounts.total is the authoritative total from the database.
-    // dbCounts.perTag maps exact tag names to per-tag totals.
     if (dbCounts) {
       stats.all = dbCounts.total;
-
-      // Build a quick lookup: tagName (lowercased) → count
       const dbTagMap = new Map<string, number>();
       for (const { tagName, count } of dbCounts.perTag) {
         dbTagMap.set(tagName.toLowerCase(), count);
       }
-
-      // For each sidebar category, sum all matching tag-name counts from DB.
-      // We take the MAX of the local heuristic count and the DB tag count so
-      // the number never goes *down* if tags are mis-spelled or missing.
       const dbMax = (keys: string[]) =>
         keys.reduce((acc, k) => acc + (dbTagMap.get(k) ?? 0), 0);
 
@@ -607,7 +722,7 @@ export default function BookmarksDirectoryView({
     [activeCategory, categories, categoryStats.all],
   );
 
-  // Filter & Sort (no per-item transform here yet - defer to display stage)
+  // Filter & Sort
   const filteredBookmarks = useMemo(() => {
     let result = bookmarks;
 
@@ -692,7 +807,7 @@ export default function BookmarksDirectoryView({
     }
   }, [activeCategory, searchQuery, sortBy]);
 
-  // Items visible so far (client-side chunked render for performance)
+  // Items visible so far
   const visibleBookmarks = useMemo(
     () => filteredBookmarks.slice(0, displayPage * PAGE_SIZE),
     [filteredBookmarks, displayPage],
@@ -724,11 +839,140 @@ export default function BookmarksDirectoryView({
     return () => observer.disconnect();
   }, [handleSentinelIntersect]);
 
-  // Memoised transform for visible items only
+  // Memoised transform for visible items
   const displayItems = useMemo(
     () => visibleBookmarks.map((b, i) => transformBookmark(b, i)),
     [visibleBookmarks],
   );
+
+  // ── Multi-selection handlers (Requirement #2) ──────────────────────────────
+  const toggleSelectBookmark = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (
+      selectedIds.size === visibleBookmarks.length &&
+      visibleBookmarks.length > 0
+    ) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleBookmarks.map((b) => b.id)));
+    }
+  }, [selectedIds.size, visibleBookmarks]);
+
+  // ── Single & Bulk Delete Actions with instant update & notification (Requirement #1 & #2) ──
+  const handleSingleDelete = async (bookmarkId: string, title: string) => {
+    try {
+      await deleteBookmarkMutation.mutateAsync({ bookmarkId });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(bookmarkId);
+        return next;
+      });
+      await refreshWorkspace();
+      toast.success(`Deleted "${title}" successfully`);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to delete bookmark";
+      toast.error(msg);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${count} selected bookmark${count > 1 ? "s" : ""}?`,
+      )
+    ) {
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await Promise.all(
+        ids.map((id) => deleteBookmarkMutation.mutateAsync({ bookmarkId: id })),
+      );
+      setSelectedIds(new Set());
+      await refreshWorkspace();
+      toast.success(
+        `Successfully deleted ${count} bookmark${count > 1 ? "s" : ""}`,
+      );
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to delete selected items";
+      toast.error(msg);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  // ── Single & Bulk Category Change Actions (Requirement #1 & #3) ───────────
+  const handleSingleCategoryChange = async (
+    bookmark: ZBookmark,
+    newCategoryTag: string,
+    newCategoryName: string,
+  ) => {
+    try {
+      const oldTagIds = (bookmark.tags ?? []).map((t) => ({ tagId: t.id }));
+      await updateTagsMutation.mutateAsync({
+        bookmarkId: bookmark.id,
+        attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+        detach: oldTagIds,
+      });
+      await refreshWorkspace();
+      toast.success(`Moved bookmark to "${newCategoryName}"`);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update category";
+      toast.error(msg);
+    }
+  };
+
+  const handleBulkCategoryChange = async (
+    newCategoryTag: string,
+    newCategoryName: string,
+  ) => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    setIsBulkProcessing(true);
+
+    try {
+      const selectedBookmarks = bookmarks.filter((b) => selectedIds.has(b.id));
+      await Promise.all(
+        selectedBookmarks.map((b) => {
+          const oldTagIds = (b.tags ?? []).map((t) => ({ tagId: t.id }));
+          return updateTagsMutation.mutateAsync({
+            bookmarkId: b.id,
+            attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+            detach: oldTagIds,
+          });
+        }),
+      );
+      setSelectedIds(new Set());
+      await refreshWorkspace();
+      toast.success(
+        `Successfully moved ${count} bookmark${count > 1 ? "s" : ""} to "${newCategoryName}"`,
+      );
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update categories";
+      toast.error(msg);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex h-screen w-screen overflow-hidden bg-background font-sans text-foreground">
@@ -809,7 +1053,7 @@ export default function BookmarksDirectoryView({
             </div>
           </div>
 
-          {/* BROWSE */}
+          {/* BROWSE CATEGORIES */}
           <div>
             {showSidebar && (
               <h4 className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
@@ -991,6 +1235,15 @@ export default function BookmarksDirectoryView({
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => refreshWorkspace()}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              title="Refresh workspace data"
+            >
+              <RefreshCw className="size-3.5" />
+              <span>Refresh</span>
+            </button>
+
             <a
               href="https://github.com"
               target="_blank"
@@ -1020,7 +1273,7 @@ export default function BookmarksDirectoryView({
           ref={mainScrollRef}
           className="flex-1 space-y-6 overflow-y-auto p-8"
         >
-          {/* ALWAYS VISIBLE Add Post & Import File Section */}
+          {/* Add Post & Import Section */}
           <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1064,6 +1317,30 @@ export default function BookmarksDirectoryView({
           {/* Controls & Filter Bar */}
           <div className="shadow-xs flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card/60 p-3">
             <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
+              {/* Select All Checkbox Button (Requirement #2) */}
+              <button
+                onClick={toggleSelectAll}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all",
+                  selectedIds.size > 0 &&
+                    selectedIds.size === visibleBookmarks.length
+                    ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "border-border bg-background text-foreground hover:bg-accent",
+                )}
+              >
+                {selectedIds.size > 0 &&
+                selectedIds.size === visibleBookmarks.length ? (
+                  <CheckSquare className="size-4 text-amber-500" />
+                ) : (
+                  <Square className="size-4 text-muted-foreground" />
+                )}
+                <span>
+                  {selectedIds.size > 0
+                    ? `Selected (${selectedIds.size})`
+                    : "Select All"}
+                </span>
+              </button>
+
               {/* Toolbar Search Input */}
               <div className="relative min-w-[200px] flex-1">
                 <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground" />
@@ -1089,12 +1366,6 @@ export default function BookmarksDirectoryView({
                   </option>
                 ))}
               </select>
-
-              {/* Filters Button */}
-              <button className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent">
-                <SlidersHorizontal className="size-3.5 text-muted-foreground" />
-                <span>Filters</span>
-              </button>
 
               {/* View Mode Toggle */}
               <div className="flex items-center rounded-lg border border-border bg-background p-0.5">
@@ -1123,9 +1394,11 @@ export default function BookmarksDirectoryView({
               </div>
             </div>
 
-            {/* Sort Dropdown */}
+            {/* Sort Dropdown (Defaulting to Newest - Requirement #5) */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Sort by</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                Sort by
+              </span>
               <select
                 value={sortBy}
                 onChange={(e) =>
@@ -1137,10 +1410,10 @@ export default function BookmarksDirectoryView({
                       | "alphabetical",
                   )
                 }
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground focus:border-amber-500 focus:outline-none"
               >
+                <option value="newest">Newest (Default)</option>
                 <option value="popular">Most Popular</option>
-                <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
                 <option value="alphabetical">Alphabetical</option>
               </select>
@@ -1211,158 +1484,224 @@ export default function BookmarksDirectoryView({
                   : "flex flex-col gap-3",
               )}
             >
-              {displayItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200",
-                    "hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
-                  )}
-                >
-                  {/* Embedded Visual Preview Box */}
-                  <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
-                    {item.previewImage ? (
-                      // oxlint-disable-next-line eslint-plugin-next/no-img-element
-                      <img
-                        src={item.previewImage}
-                        alt={item.title}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = "none";
-                          const fallback =
-                            target.nextElementSibling as HTMLElement | null;
-                          if (fallback) fallback.style.display = "flex";
+              {displayItems.map((item) => {
+                const isSelected = selectedIds.has(item.id);
+
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card transition-all duration-200",
+                      isSelected
+                        ? "border-amber-500 ring-2 ring-amber-500/30 dark:border-amber-500"
+                        : "border-border hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
+                    )}
+                  >
+                    {/* Embedded Visual Preview Box */}
+                    <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
+                      {item.previewImage ? (
+                        // oxlint-disable-next-line eslint-plugin-next/no-img-element
+                        <img
+                          src={item.previewImage}
+                          alt={item.title}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.style.display = "none";
+                            const fallback =
+                              target.nextElementSibling as HTMLElement | null;
+                            if (fallback) fallback.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+
+                      {/* Fallback Graphic Box */}
+                      <div
+                        style={{
+                          display: item.previewImage ? "none" : "flex",
                         }}
-                      />
-                    ) : null}
-
-                    {/* Fallback Graphic Box */}
-                    <div
-                      style={{
-                        display: item.previewImage ? "none" : "flex",
-                      }}
-                      className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={cn(
-                            "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
-                            item.platform.color,
-                          )}
-                        >
-                          {item.platform.name}
-                        </span>
-                        <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                          {currentCategoryObj.icon}
-                        </div>
-                      </div>
-                      <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
-                        {item.url || item.summary}
-                      </p>
-                    </div>
-
-                    {/* Platform Badge Overlay on Image */}
-                    {item.previewImage && (
-                      <span
-                        className={cn(
-                          "shadow-xs absolute left-3 top-3 rounded-md border px-2 py-0.5 text-[10px] font-bold backdrop-blur-md",
-                          item.platform.color,
-                        )}
+                        className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
                       >
-                        {item.platform.name}
-                      </span>
-                    )}
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={cn(
+                              "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
+                              item.platform.color,
+                            )}
+                          >
+                            {item.platform.name}
+                          </span>
+                          <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                            {currentCategoryObj.icon}
+                          </div>
+                        </div>
+                        <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
+                          {item.url || item.summary}
+                        </p>
+                      </div>
 
-                    {/* Live Interactive Embed Button Overlay */}
-                    {item.url && (
+                      {/* Selection Checkbox Overlay (Requirement #2) */}
                       <button
-                        onClick={() =>
-                          setActiveEmbedItem({
-                            title: item.title,
-                            url: item.url,
-                            platform: item.platform,
-                          })
-                        }
-                        className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-                        title="Open interactive embed preview"
-                      >
-                        {item.platform.type === "youtube" ? (
-                          <Play className="size-3 fill-current" />
-                        ) : (
-                          <Eye className="size-3" />
+                        onClick={() => toggleSelectBookmark(item.id)}
+                        className={cn(
+                          "absolute left-3 top-3 z-10 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
+                          isSelected
+                            ? "border-amber-500 bg-amber-500 text-white"
+                            : "border-border/80 bg-background/80 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
                         )}
-                        <span>Embed Preview</span>
+                        title={isSelected ? "Deselect item" : "Select item"}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="size-4 fill-current" />
+                        ) : (
+                          <Square className="size-4" />
+                        )}
                       </button>
-                    )}
-                  </div>
 
-                  {/* Card Main Content */}
-                  <div className="space-y-3 p-4">
-                    {/* Card Title & Icon */}
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-                        {currentCategoryObj.icon}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <a
-                          href={item.url || "#"}
-                          target={item.url ? "_blank" : "_self"}
-                          rel="noreferrer"
-                          className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+                      {/* Live Interactive Embed Button Overlay (Requirement #4) */}
+                      {item.url && (
+                        <button
+                          onClick={() =>
+                            setActiveEmbedItem({
+                              title: item.title,
+                              url: item.url,
+                              platform: item.platform,
+                            })
+                          }
+                          className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+                          title="Open interactive embed preview"
                         >
-                          {item.title}
-                        </a>
-                      </div>
-
-                      {item.bookmark && (
-                        <div className="opacity-0 transition-opacity group-hover:opacity-100">
-                          <BookmarkOptions bookmark={item.bookmark} />
-                        </div>
+                          {item.platform.type === "youtube" ? (
+                            <Play className="size-3 fill-current" />
+                          ) : (
+                            <Eye className="size-3" />
+                          )}
+                          <span>Embed Preview</span>
+                        </button>
                       )}
                     </div>
 
-                    {/* Card Description */}
-                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                      {item.summary}
-                    </p>
-                  </div>
+                    {/* Card Main Content */}
+                    <div className="space-y-3 p-4">
+                      {/* Card Title & Icon */}
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+                          {currentCategoryObj.icon}
+                        </div>
 
-                  {/* Bottom Bar: Tag + Stats + Complete Working Link */}
-                  <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {item.categoryTag}
-                      </span>
+                        <div className="min-w-0 flex-1">
+                          <a
+                            href={item.url || "#"}
+                            target={item.url ? "_blank" : "_self"}
+                            rel="noreferrer"
+                            className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
+                          >
+                            {item.title}
+                          </a>
+                        </div>
 
-                      <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                        <Download className="size-2.5" />
-                        <span>{item.statsCount.toLocaleString()}</span>
+                        {item.bookmark && (
+                          <div className="flex items-center gap-1">
+                            {/* Quick Delete Button (Requirement #1) */}
+                            <button
+                              onClick={() =>
+                                handleSingleDelete(item.id, item.title)
+                              }
+                              className="flex size-7 items-center justify-center rounded-lg border border-border/50 text-muted-foreground opacity-0 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                              title="Delete bookmark"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                            <BookmarkOptions bookmark={item.bookmark} />
+                          </div>
+                        )}
                       </div>
+
+                      {/* Card Description */}
+                      <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        {item.summary}
+                      </p>
                     </div>
 
-                    {/* Complete Working Link Action */}
-                    {item.url ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
-                      >
-                        <span className="max-w-[130px] truncate">
-                          {item.url.replace(/^https?:\/\//, "")}
-                        </span>
-                        <ExternalLink className="size-3 shrink-0" />
-                      </a>
-                    ) : (
-                      <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
-                        <Plus className="size-3" />
-                      </button>
-                    )}
+                    {/* Bottom Bar: 1-Click Category Dropdown (Requirement #3) + Link */}
+                    <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        {/* 1-Click Category Change Dropdown (Requirement #3) */}
+                        {item.bookmark ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-foreground transition-all hover:border-amber-500 hover:text-amber-500">
+                                <Tag className="size-2.5 text-amber-500" />
+                                <span>{item.categoryTag}</span>
+                                <ChevronDown className="size-2.5 opacity-60" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="start"
+                              className="z-50 w-48"
+                            >
+                              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Change Category
+                              </div>
+                              <DropdownMenuSeparator />
+                              {CATEGORY_OPTIONS.map((opt) => (
+                                <DropdownMenuItem
+                                  key={opt.id}
+                                  onClick={() =>
+                                    handleSingleCategoryChange(
+                                      item.bookmark!,
+                                      opt.tag,
+                                      opt.name,
+                                    )
+                                  }
+                                  className="flex cursor-pointer items-center justify-between text-xs"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {opt.icon}
+                                    <span>{opt.name}</span>
+                                  </div>
+                                  {item.categoryTag.toLowerCase() ===
+                                    opt.tag.toLowerCase() && (
+                                    <Check className="size-3.5 text-amber-500" />
+                                  )}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                            {item.categoryTag}
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <Download className="size-2.5" />
+                          <span>{item.statsCount.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Complete Working Link Action */}
+                      {item.url ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+                        >
+                          <span className="max-w-[110px] truncate">
+                            {item.url.replace(/^https?:\/\//, "")}
+                          </span>
+                          <ExternalLink className="size-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <button className="flex size-6 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-amber-500 hover:text-amber-500">
+                          <Plus className="size-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -1379,9 +1718,85 @@ export default function BookmarksDirectoryView({
         </main>
       </div>
 
-      {/* 3. Live Interactive Embed Modal Dialog */}
+      {/* 3. Floating Bulk Action Toolbar (Requirement #2 & #3) */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-amber-500/40 bg-card/95 px-5 py-3 shadow-2xl backdrop-blur-xl duration-200 animate-in fade-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-2 border-r border-border pr-2">
+            <div className="flex size-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
+              {selectedIds.size}
+            </div>
+            <span className="text-xs font-bold text-foreground">Selected</span>
+          </div>
+
+          {/* Select All / Deselect Toggle */}
+          <button
+            onClick={toggleSelectAll}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            {selectedIds.size === visibleBookmarks.length
+              ? "Deselect All"
+              : "Select All"}
+          </button>
+
+          {/* Move Category Dropdown (Requirement #3) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                disabled={isBulkProcessing}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-400"
+              >
+                <FolderSync className="size-3.5" />
+                <span>Move Category</span>
+                <ChevronDown className="size-3 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="z-50 w-52">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Move {selectedIds.size} item{selectedIds.size > 1 ? "s" : ""}{" "}
+                to:
+              </div>
+              <DropdownMenuSeparator />
+              {CATEGORY_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.id}
+                  onClick={() => handleBulkCategoryChange(opt.tag, opt.name)}
+                  className="flex cursor-pointer items-center gap-2.5 text-xs"
+                >
+                  {opt.icon}
+                  <span>{opt.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Delete Selected Button (Requirement #2) */}
+          <button
+            onClick={handleBulkDelete}
+            disabled={isBulkProcessing}
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-1.5 text-xs font-semibold text-white shadow-md transition-all hover:bg-red-700 active:scale-95 disabled:opacity-50"
+          >
+            {isBulkProcessing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            <span>Delete Selected ({selectedIds.size})</span>
+          </button>
+
+          {/* Cancel Selection */}
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Clear selection"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {/* 4. Live Interactive Embed Modal Dialog (Requirement #4) */}
       {activeEmbedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm duration-200 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md duration-200 animate-in fade-in">
           <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             {/* Modal Header */}
             <div className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
@@ -1418,7 +1833,7 @@ export default function BookmarksDirectoryView({
               </div>
             </div>
 
-            {/* Modal Body: Live Embed Frame */}
+            {/* Modal Body: Live Embed Frame & Media Handler */}
             <div className="relative flex-1 bg-black/90">
               {activeEmbedItem.platform.type === "youtube" &&
               activeEmbedItem.platform.embedUrl ? (
@@ -1440,10 +1855,6 @@ export default function BookmarksDirectoryView({
                 />
               ) : activeEmbedItem.platform.type === "twitter" &&
                 activeEmbedItem.platform.embedUrl ? (
-                // ── Official Twitter / X oEmbed widget ──────────────────────
-                // X blocks third-party iframes (twitframe etc.).
-                // We render the official blockquote + widgets.js inside a
-                // sandboxed iframe HTML blob so the script executes safely.
                 <TwitterEmbedFrame
                   url={activeEmbedItem.platform.embedUrl}
                   tweetId={activeEmbedItem.platform.videoId}
@@ -1455,45 +1866,81 @@ export default function BookmarksDirectoryView({
                   title={activeEmbedItem.title}
                   className="h-full w-full border-0 bg-white"
                 />
+              ) : activeEmbedItem.platform.type === "tiktok" &&
+                activeEmbedItem.platform.embedUrl ? (
+                <iframe
+                  src={activeEmbedItem.platform.embedUrl}
+                  title={activeEmbedItem.title}
+                  className="h-full w-full border-0 bg-black"
+                />
+              ) : activeEmbedItem.platform.type === "audio" ? (
+                <div className="flex h-full flex-col items-center justify-center bg-black/95 p-8 text-center">
+                  <div className="mb-6 flex size-20 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/20 text-purple-400 shadow-xl">
+                    <Music className="size-10" />
+                  </div>
+                  <h4 className="mb-2 text-lg font-bold text-white">
+                    {activeEmbedItem.title}
+                  </h4>
+                  <p className="mb-6 max-w-md truncate text-xs text-gray-400">
+                    {activeEmbedItem.url}
+                  </p>
+                  {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
+                  <audio
+                    controls
+                    autoPlay
+                    src={activeEmbedItem.url}
+                    className="w-full max-w-md"
+                  />
+                </div>
+              ) : activeEmbedItem.platform.type === "videofile" ? (
+                <div className="flex h-full items-center justify-center bg-black p-4">
+                  {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
+                  <video
+                    controls
+                    autoPlay
+                    src={activeEmbedItem.url}
+                    className="max-h-full max-w-full rounded-xl"
+                  />
+                </div>
+              ) : activeEmbedItem.platform.type === "image" ? (
+                <div className="flex h-full items-center justify-center bg-black/95 p-4">
+                  {/* oxlint-disable-next-line eslint-plugin-next/no-img-element */}
+                  <img
+                    src={activeEmbedItem.url}
+                    alt={activeEmbedItem.title}
+                    className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+                  />
+                </div>
               ) : activeEmbedItem.platform.type === "github" ? (
-                // ── GitHub blocks all iframing — show open-in-tab UI ─────────
                 <PlatformOpenInTab
                   url={activeEmbedItem.url}
                   platformName="GitHub"
                   icon="🐙"
-                  note="GitHub blocks embedding in iframes. Click below to open the repo."
-                />
-              ) : activeEmbedItem.platform.type === "twitter" ? (
-                // ── X profile / non-tweet link — no tweet ID to embed ────────
-                <PlatformOpenInTab
-                  url={activeEmbedItem.url}
-                  platformName="X / Twitter"
-                  icon="𝕏"
-                  note="Only individual tweets can be embedded. Click below to open on X."
-                />
-              ) : activeEmbedItem.platform.type === "reddit" ? (
-                <iframe
-                  src={activeEmbedItem.url}
-                  title={activeEmbedItem.title}
-                  className="h-full w-full border-0 bg-white"
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                  note="GitHub security headers block embedded iFrames. Click below to view repo on GitHub."
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-                  <div className="text-center">
-                    <p className="mb-2 text-sm text-muted-foreground">
-                      Direct embedding is not supported for this platform.
-                    </p>
+                <div className="flex h-full w-full flex-col">
+                  <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-500">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Sparkles className="size-3.5" />
+                      Live Web Preview — If website blocks framing, click Open
+                      Original Link.
+                    </span>
                     <a
                       href={activeEmbedItem.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600"
+                      className="flex items-center gap-1 font-bold underline hover:text-amber-400"
                     >
-                      <ExternalLink className="size-4" />
-                      Open in New Tab
+                      Open in New Tab <ExternalLink className="size-3" />
                     </a>
                   </div>
+                  <iframe
+                    src={activeEmbedItem.url}
+                    title={activeEmbedItem.title}
+                    className="h-full w-full border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+                  />
                 </div>
               )}
             </div>
