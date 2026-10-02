@@ -1078,6 +1078,7 @@ export default function BookmarksDirectoryView({
   const { data: dbCounts } = useQuery(
     api.bookmarks.getBookmarkCounts.queryOptions(undefined, {
       staleTime: 30_000,
+      enabled: Boolean(session),
     }),
   );
 

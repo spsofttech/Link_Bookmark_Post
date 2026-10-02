@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useIsFetching, useIsMutating } from "@tanstack/react-query";
+import { useIsMutating } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function GlobalProcessLoader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isFetching = useIsFetching();
   const isMutating = useIsMutating();
 
   const [navigating, setNavigating] = useState(false);
@@ -66,7 +65,7 @@ export default function GlobalProcessLoader() {
     }
   }, [pathname, searchParams]);
 
-  const activeProcess = isFetching > 0 || isMutating > 0 || navigating;
+  const activeProcess = isMutating > 0 || navigating;
 
   if (!activeProcess && progress === 0) return null;
 
@@ -86,7 +85,7 @@ export default function GlobalProcessLoader() {
       </div>
 
       {/* Top Right Floating Activity Spinner */}
-      {(isFetching > 0 || isMutating > 0 || navigating) && (
+      {(isMutating > 0 || navigating) && (
         <div className="pointer-events-auto absolute right-4 top-3 flex items-center gap-2.5 rounded-full border border-border/80 bg-popover/90 px-3.5 py-1.5 text-xs font-medium text-popover-foreground shadow-lg backdrop-blur-md duration-200 animate-in fade-in slide-in-from-top-2">
           <div className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Loader2 className="size-3.5 animate-spin" />

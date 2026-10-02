@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import UploadDropzone from "@/components/dashboard/UploadDropzone";
 import { useSortOrderStore } from "@/lib/store/useSortOrderStore";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 
 import type {
   ZGetBookmarksRequest,
@@ -24,6 +25,7 @@ export default function UpdatableBookmarksGrid({
   showEditorCard?: boolean;
   itemsPerPage?: number;
 }) {
+  const { data: session } = useSession();
   const api = useTRPC();
   let sortOrder = useSortOrderStore((state) => state.sortOrder);
   if (sortOrder === "relevance") {
@@ -44,23 +46,26 @@ export default function UpdatableBookmarksGrid({
           }),
           initialCursor: null,
           getNextPageParam: (lastPage) => lastPage.nextCursor,
-          refetchOnMount: true,
+          refetchOnMount: Boolean(session),
+          enabled: Boolean(session),
         },
       ),
     );
 
   useEffect(() => {
-    refetch();
-  }, [sortOrder, refetch]);
+    if (session) {
+      refetch();
+    }
+  }, [sortOrder, refetch, session]);
 
   // Auto-fetch all remaining pages eagerly so all data is loaded without
   // requiring the user to scroll. This ensures all 493+ records become
   // available to the directory view's client-side filter/search/sort.
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) {
+    if (session && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, data]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, data, session]);
 
   const grid = (
     <BookmarksGrid

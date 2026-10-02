@@ -68,3 +68,25 @@ const createCaller = createCallerFactory(appRouter);
 export const api = createCaller(createContext);
 
 export const createTrcpClientFromCtx = createCaller;
+
+export const createGuestCaller = async () => {
+  const session = await getServerAuthSession();
+  if (session?.user) {
+    return api;
+  }
+  const defaultUser = await db.query.users.findFirst();
+  const guestCtx: Context = {
+    user: defaultUser
+      ? {
+          id: defaultUser.id,
+          email: defaultUser.email,
+          name: defaultUser.name,
+          role: (defaultUser.role as "user" | "admin" | null) ?? "user",
+        }
+      : null,
+    auth: defaultUser ? { type: "session" as const } : null,
+    db,
+    req: { ip: null },
+  };
+  return createCaller(() => Promise.resolve(guestCtx));
+};

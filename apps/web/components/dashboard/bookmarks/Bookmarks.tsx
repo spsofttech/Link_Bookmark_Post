@@ -1,5 +1,5 @@
 import { Separator } from "@/components/ui/separator";
-import { api } from "@/server/api/client";
+import { api, createGuestCaller } from "@/server/api/client";
 import { getServerAuthSession } from "@/server/auth";
 
 import type { ZGetBookmarksRequest } from "@karakeep/shared/types/bookmarks";
@@ -23,14 +23,19 @@ export default async function Bookmarks({
     bookmarks: [],
     nextCursor: null,
   };
-  if (session) {
-    try {
+  try {
+    if (session) {
       bookmarks = await api.bookmarks.getBookmarks({
         ...query,
       });
-    } catch (error) {
-      console.error("Failed to fetch initial bookmarks:", error);
+    } else {
+      const guestCaller = await createGuestCaller();
+      bookmarks = await guestCaller.bookmarks.getBookmarks({
+        ...query,
+      });
     }
+  } catch (error) {
+    console.error("Failed to fetch initial bookmarks:", error);
   }
 
   return (
