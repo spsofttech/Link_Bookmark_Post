@@ -32,7 +32,6 @@ import {
   Moon,
   Eye,
   X,
-  Play,
   Loader2,
   CheckSquare,
   Square,
@@ -40,7 +39,6 @@ import {
   FolderSync,
   ChevronDown,
   Check,
-  Music,
   Tag,
   RefreshCw,
 } from "lucide-react";
@@ -400,277 +398,259 @@ function transformBookmark(b: ZBookmark, index: number) {
   };
 }
 
-// ─── Twitter/X official oEmbed widget component (Memoized) ───────────────────
-const TwitterEmbedFrame = memo(function TwitterEmbedFrame({
-  url,
-}: {
-  url: string;
-  tweetId: string | null;
-}) {
-  const normalizedUrl = (url || "").replace("x.com", "twitter.com");
-  const twitframeUrl = `https://twitframe.com/show?url=${encodeURIComponent(normalizedUrl)}`;
-
-  return (
-    <div className="flex h-full w-full flex-col items-center overflow-y-auto bg-[#15202b]">
-      <iframe
-        src={twitframeUrl}
-        title="X / Twitter post"
-        className="h-full min-h-[450px] w-full border-0"
-        loading="lazy"
-      />
-    </div>
-  );
-});
-
-// ─── Open-in-new-tab fallback ──────────────────────────────────────────────
-function PlatformOpenInTab({
-  url,
-  platformName,
-  icon,
-  note,
-}: {
-  url: string;
-  platformName: string;
-  icon: string;
-  note: string;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-card text-4xl shadow-inner">
-        {icon}
-      </div>
-      <div className="space-y-1">
-        <h4 className="text-base font-bold text-foreground">{platformName}</h4>
-        <p className="max-w-xs text-sm text-muted-foreground">{note}</p>
-      </div>
-      <a
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:scale-105 hover:bg-amber-600 active:scale-95"
-      >
-        <ExternalLink className="size-4" />
-        Open on {platformName}
-      </a>
-    </div>
-  );
-}
-
-// ─── Instagram Embed Frame (Guaranteed Zero Block Screen) ───────────────
-const InstagramEmbedFrame = memo(function InstagramEmbedFrame({
-  url,
-  embedUrl,
-  title,
-}: {
-  url: string;
-  embedUrl: string;
-  title: string;
-}) {
-  const [iframeFailed, setIframeFailed] = useState(false);
-
-  return (
-    <div className="flex h-full w-full flex-col bg-slate-950">
-      {/* Top Banner with Direct Link */}
-      <div className="flex items-center justify-between border-b border-pink-500/20 bg-pink-500/10 px-4 py-2 text-xs text-pink-400">
-        <span className="flex items-center gap-1.5 font-medium">
-          <Sparkles className="size-3.5" />
-          Instagram Live Post Viewer
-        </span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1 font-bold underline hover:text-pink-300"
-        >
-          Open Directly on Instagram <ExternalLink className="size-3" />
-        </a>
-      </div>
-
-      <div className="relative flex-1 overflow-hidden">
-        {!iframeFailed ? (
-          <iframe
-            src={embedUrl}
-            title={title}
-            onError={() => setIframeFailed(true)}
-            className="h-full w-full border-0 bg-white"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
-          />
-        ) : (
-          <PlatformOpenInTab
-            url={url}
-            platformName="Instagram"
-            icon="📸"
-            note="Instagram security headers require opening directly. Click below to view post on Instagram."
-          />
-        )}
-      </div>
-    </div>
-  );
-});
-
-// ─── Standalone Memoized Embed Modal (NO Reload on Parent Scroll) ─────────────
-interface EmbedItem {
-  title: string;
-  url: string;
-  platform: ReturnType<typeof getPlatformInfo>;
-}
-
-const EmbedModalDialog = memo(function EmbedModalDialog({
+// ─── Post Detail Slider Drawer (NO Embed IFrames, Pure Post Details) ─────────────
+/* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
+const PostDetailSlider = memo(function PostDetailSlider({
   item,
   onClose,
+  onSingleCategoryChange,
+  onSingleDelete,
 }: {
-  item: EmbedItem;
+  item: ReturnType<typeof transformBookmark>;
   onClose: () => void;
+  onSingleCategoryChange?: (
+    bookmark: ZBookmark,
+    tag: string,
+    name: string,
+  ) => void;
+  onSingleDelete?: (id: string, title: string) => void;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const createdDate = item.bookmark?.createdAt
+    ? new Date(item.bookmark.createdAt).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md duration-200 animate-in fade-in">
-      <div className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        {/* Modal Header */}
-        <div className="flex h-14 items-center justify-between border-b border-border bg-card px-5">
-          <div className="flex min-w-0 items-center gap-3">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-in fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl duration-300 animate-in slide-in-from-right"
+      >
+        {/* Slider Header */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-6">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span
               className={cn(
-                "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                "rounded-md border px-2.5 py-0.5 text-xs font-bold",
                 item.platform.color,
               )}
             >
               {item.platform.name}
             </span>
-            <h3 className="line-clamp-1 text-sm font-bold text-foreground">
-              {item.title}
-            </h3>
+            {item.bookmark && onSingleCategoryChange ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600 transition-all hover:border-amber-500 dark:text-amber-400">
+                    <Tag className="size-3 text-amber-500" />
+                    <span>{item.categoryTag}</span>
+                    <ChevronDown className="size-3 opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="z-50 w-48">
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Change Category
+                  </div>
+                  <DropdownMenuSeparator />
+                  {CATEGORY_OPTIONS.map((opt) => (
+                    <DropdownMenuItem
+                      key={opt.id}
+                      onClick={() =>
+                        onSingleCategoryChange(
+                          item.bookmark!,
+                          opt.tag,
+                          opt.name,
+                        )
+                      }
+                      className="flex cursor-pointer items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        {opt.icon}
+                        <span>{opt.name}</span>
+                      </div>
+                      {item.categoryTag.toLowerCase() ===
+                        opt.tag.toLowerCase() && (
+                        <Check className="size-3.5 text-amber-500" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                {item.categoryTag}
+              </span>
+            )}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              <span>Open Original Link</span>
-              <ExternalLink className="size-3.5" />
-            </a>
+            {item.url && (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
+              >
+                <span>Open Link</span>
+                <ExternalLink className="size-3.5" />
+              </a>
+            )}
             <button
               onClick={onClose}
               className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Close post details (Esc)"
             >
               <X className="size-4" />
             </button>
           </div>
         </div>
 
-        {/* Modal Body: Live Embed Frame */}
-        <div className="relative flex-1 bg-black/90">
-          {item.platform.type === "youtube" && item.platform.embedUrl ? (
-            <iframe
-              src={item.platform.embedUrl}
-              title={item.title}
-              className="h-full w-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          ) : item.platform.type === "vimeo" && item.platform.embedUrl ? (
-            <iframe
-              src={item.platform.embedUrl}
-              title={item.title}
-              className="h-full w-full border-0"
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-            />
-          ) : item.platform.type === "twitter" && item.platform.embedUrl ? (
-            <TwitterEmbedFrame
-              url={item.platform.embedUrl}
-              tweetId={item.platform.videoId}
-            />
-          ) : item.platform.type === "instagram" && item.platform.embedUrl ? (
-            <InstagramEmbedFrame
-              url={item.url}
-              embedUrl={item.platform.embedUrl}
-              title={item.title}
-            />
-          ) : item.platform.type === "tiktok" && item.platform.embedUrl ? (
-            <iframe
-              src={item.platform.embedUrl}
-              title={item.title}
-              className="h-full w-full border-0 bg-black"
-            />
-          ) : item.platform.type === "facebook" && item.platform.embedUrl ? (
-            <iframe
-              src={item.platform.embedUrl}
-              title={item.title}
-              className="h-full w-full border-0 bg-white"
-            />
-          ) : item.platform.type === "audio" ? (
-            <div className="flex h-full flex-col items-center justify-center bg-black/95 p-8 text-center">
-              <div className="mb-6 flex size-20 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/20 text-purple-400 shadow-xl">
-                <Music className="size-10" />
-              </div>
-              <h4 className="mb-2 text-lg font-bold text-white">
-                {item.title}
-              </h4>
-              <p className="mb-6 max-w-md truncate text-xs text-gray-400">
-                {item.url}
-              </p>
-              {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
-              <audio
-                controls
-                autoPlay
-                src={item.url}
-                className="w-full max-w-md"
-              />
-            </div>
-          ) : item.platform.type === "videofile" ? (
-            <div className="flex h-full items-center justify-center bg-black p-4">
-              {/* oxlint-disable-next-line eslint-plugin-jsx-a11y/media-has-caption */}
-              <video
-                controls
-                autoPlay
-                src={item.url}
-                className="max-h-full max-w-full rounded-xl"
-              />
-            </div>
-          ) : item.platform.type === "image" ? (
-            <div className="flex h-full items-center justify-center bg-black/95 p-4">
+        {/* Slider Content Body: Post Details */}
+        <div className="flex-1 space-y-6 overflow-y-auto p-6">
+          {/* Cover Preview Image */}
+          {item.previewImage && (
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-muted/30">
               {/* oxlint-disable-next-line eslint-plugin-next/no-img-element */}
               <img
-                src={item.url}
+                src={item.previewImage}
                 alt={item.title}
-                className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+                className="max-h-80 w-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = "none";
+                }}
               />
             </div>
-          ) : item.platform.type === "github" ? (
-            <PlatformOpenInTab
-              url={item.url}
-              platformName="GitHub"
-              icon="🐙"
-              note="GitHub security headers block embedded iFrames. Click below to view repo on GitHub."
-            />
-          ) : (
-            <div className="flex h-full w-full flex-col">
-              <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-500">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Sparkles className="size-3.5" />
-                  Live Web Preview — If website blocks framing, click Open
-                  Original Link.
-                </span>
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 font-bold underline hover:text-amber-400"
-                >
-                  Open in New Tab <ExternalLink className="size-3" />
-                </a>
+          )}
+
+          {/* Title */}
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground">
+              {item.title}
+            </h2>
+            {item.url && (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+              >
+                <span className="max-w-md truncate">{item.url}</span>
+                <ExternalLink className="size-3 shrink-0" />
+              </a>
+            )}
+          </div>
+
+          {/* Post Summary & Body Content */}
+          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Post Details & Description
+            </h3>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+              {item.summary}
+            </p>
+          </div>
+
+          {/* Additional Note */}
+          {item.bookmark?.note && item.bookmark.note !== item.summary && (
+            <div className="space-y-2 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Personal Note
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {item.bookmark.note}
+              </p>
+            </div>
+          )}
+
+          {/* Tags */}
+          {item.bookmark?.tags && item.bookmark.tags.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Attached Tags
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {item.bookmark.tags.map((t) => (
+                  <span
+                    key={t.id || t.name}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground"
+                  >
+                    <Tag className="size-3 text-amber-500" />
+                    {t.name}
+                  </span>
+                ))}
               </div>
-              <iframe
-                src={item.url}
-                title={item.title}
-                className="h-full w-full border-0 bg-white"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-              />
             </div>
+          )}
+
+          {/* Metadata Specs */}
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-border bg-card p-4 text-xs">
+            <div>
+              <span className="text-muted-foreground">Source Platform:</span>
+              <p className="font-semibold text-foreground">{item.domain}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Bookmark Type:</span>
+              <p className="font-semibold uppercase text-foreground">
+                {item.bookmark?.content?.type || "LINK"}
+              </p>
+            </div>
+            {createdDate && (
+              <div>
+                <span className="text-muted-foreground">Date Saved:</span>
+                <p className="font-semibold text-foreground">{createdDate}</p>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">Engagement Views:</span>
+              <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {item.statsCount.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Slider Footer */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-t border-border bg-card px-6">
+          {item.bookmark && onSingleDelete ? (
+            <button
+              onClick={() => {
+                onClose();
+                onSingleDelete(item.id, item.title);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
+            >
+              <Trash2 className="size-3.5" />
+              <span>Delete Bookmark</span>
+            </button>
+          ) : (
+            <div />
+          )}
+
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600 active:scale-95"
+            >
+              <ExternalLink className="size-4" />
+              <span>Visit Original Post</span>
+            </a>
           )}
         </div>
       </div>
@@ -678,15 +658,13 @@ const EmbedModalDialog = memo(function EmbedModalDialog({
   );
 });
 
-// ─── Card Visual Embed Box (100% Embed Coverage + Permanent Memory Cache) ─────
+// ─── Card Visual Embed Box (100% Visual Coverage + Memory Cache) ─────
 const CardEmbedPreviewBox = memo(function CardEmbedPreviewBox({
   item,
   currentCategoryIcon,
-  onOpenEmbed,
 }: {
   item: ReturnType<typeof transformBookmark>;
   currentCategoryIcon: React.ReactNode;
-  onOpenEmbed: (item: EmbedItem) => void;
 }) {
   const cacheKey = item.id || item.url;
   const isAlreadyCached = useMemo(
@@ -700,33 +678,10 @@ const CardEmbedPreviewBox = memo(function CardEmbedPreviewBox({
     PermanentEmbedCache.set(cacheKey, "loaded");
   }, [cacheKey]);
 
-  // For Instagram & YouTube, render live direct iframe embed right inside card preview box!
-  const showDirectIframe =
-    item.platform.type === "instagram" ||
-    item.platform.type === "youtube" ||
-    item.platform.type === "vimeo";
-
   return (
     <div className="relative h-44 w-full overflow-hidden border-b border-border bg-muted/40">
-      {/* 1. Direct Live Embedded Frame for Instagram / YouTube / Vimeo inside Card */}
-      {showDirectIframe && item.platform.embedUrl ? (
-        <iframe
-          src={item.platform.embedUrl}
-          title={item.title}
-          onLoad={handleLoadSuccess}
-          className={cn(
-            "h-full w-full border-0 transition-opacity duration-300",
-            loaded || isAlreadyCached
-              ? "opacity-100"
-              : "absolute inset-0 opacity-0",
-          )}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-        />
-      ) : null}
-
-      {/* 2. Visual Snapshot Preview Image (Microlink snapshot guarantees 100% URL coverage for Instagram, Threads, FB, X, TikTok, GitHub, etc.) */}
-      {(!showDirectIframe || !loaded) && item.previewImage ? (
+      {/* Visual Snapshot Preview Image */}
+      {item.previewImage ? (
         // oxlint-disable-next-line eslint-plugin-next/no-img-element
         <img
           src={item.previewImage}
@@ -745,7 +700,7 @@ const CardEmbedPreviewBox = memo(function CardEmbedPreviewBox({
         />
       ) : null}
 
-      {/* 3. Fallback Graphic Box */}
+      {/* Fallback Graphic Box */}
       <div
         style={{
           display: loaded || isAlreadyCached ? "none" : "flex",
@@ -774,38 +729,6 @@ const CardEmbedPreviewBox = memo(function CardEmbedPreviewBox({
           </p>
         </div>
       </div>
-
-      {/* Platform Badge Overlay */}
-      <span
-        className={cn(
-          "shadow-xs absolute left-3 top-3 z-10 rounded-md border px-2 py-0.5 text-[10px] font-bold backdrop-blur-md",
-          item.platform.color,
-        )}
-      >
-        {item.platform.name}
-      </span>
-
-      {/* Live Interactive Embed Button Overlay */}
-      {item.url && (
-        <button
-          onClick={() =>
-            onOpenEmbed({
-              title: item.title,
-              url: item.url,
-              platform: item.platform,
-            })
-          }
-          className="shadow-xs absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-          title="Open interactive embed preview"
-        >
-          {item.platform.type === "youtube" ? (
-            <Play className="size-3 fill-current" />
-          ) : (
-            <Eye className="size-3" />
-          )}
-          <span>Embed Preview</span>
-        </button>
-      )}
     </div>
   );
 });
@@ -824,7 +747,7 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
   isSelected: boolean;
   currentCategoryIcon: React.ReactNode;
   onToggleSelect: (id: string) => void;
-  onOpenEmbed: (item: EmbedItem) => void;
+  onOpenEmbed: (item: ReturnType<typeof transformBookmark>) => void;
   onSingleDelete: (id: string, title: string) => void;
   onSingleCategoryChange: (
     bookmark: ZBookmark,
@@ -834,37 +757,68 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
 }) {
   return (
     <div
+      onClick={() => onOpenEmbed(item)}
       className={cn(
-        "shadow-xs group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-card transition-all duration-200",
+        "shadow-xs group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border bg-card transition-all duration-200",
         isSelected
           ? "border-amber-500 ring-2 ring-amber-500/30 dark:border-amber-500"
           : "border-border hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
       )}
     >
-      {/* 100% Embedded Visual Preview Box with Memory Cache */}
+      {/* Top Header Overlay Bar (Checkbox, Platform Badge & Embed Preview side-by-side, NO Overlap) */}
       <div className="relative">
-        {/* Selection Checkbox Overlay */}
-        <button
-          onClick={() => onToggleSelect(item.id)}
-          className={cn(
-            "absolute left-3 top-12 z-20 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
-            isSelected
-              ? "border-amber-500 bg-amber-500 text-white"
-              : "border-border/80 bg-background/80 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
-          )}
-          title={isSelected ? "Deselect item" : "Select item"}
-        >
-          {isSelected ? (
-            <CheckSquare className="size-4 fill-current" />
-          ) : (
-            <Square className="size-4" />
-          )}
-        </button>
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex items-center justify-between gap-2">
+          {/* Left Side: Checkbox + Platform Badge side-by-side */}
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(item.id);
+              }}
+              className={cn(
+                "flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
+                isSelected
+                  ? "border-amber-500 bg-amber-500 text-white"
+                  : "border-border/80 bg-background/90 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
+              )}
+              title={isSelected ? "Deselect item" : "Select item"}
+            >
+              {isSelected ? (
+                <CheckSquare className="size-4 fill-current" />
+              ) : (
+                <Square className="size-4" />
+              )}
+            </button>
+
+            <span
+              className={cn(
+                "shadow-xs rounded-md border px-2 py-1 text-[10px] font-bold backdrop-blur-md",
+                item.platform.color,
+              )}
+            >
+              {item.platform.name}
+            </span>
+          </div>
+
+          {/* Right Side: Embed Preview Button */}
+          <div className="pointer-events-auto flex items-center">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenEmbed(item);
+              }}
+              className="shadow-xs flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+              title="Open post details slider"
+            >
+              <Eye className="size-3" />
+              <span>Embed Preview</span>
+            </button>
+          </div>
+        </div>
 
         <CardEmbedPreviewBox
           item={item}
           currentCategoryIcon={currentCategoryIcon}
-          onOpenEmbed={onOpenEmbed}
         />
       </div>
 
@@ -877,20 +831,21 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
           </div>
 
           <div className="min-w-0 flex-1">
-            <a
-              href={item.url || "#"}
-              target={item.url ? "_blank" : "_self"}
-              rel="noreferrer"
-              className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400"
-            >
+            <h3 className="line-clamp-1 text-sm font-bold tracking-tight text-foreground transition-colors group-hover:text-amber-600 dark:group-hover:text-amber-400">
               {item.title}
-            </a>
+            </h3>
           </div>
 
           {item.bookmark && (
-            <div className="flex items-center gap-1">
+            <div
+              className="flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
-                onClick={() => onSingleDelete(item.id, item.title)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSingleDelete(item.id, item.title);
+                }}
                 className="flex size-7 items-center justify-center rounded-lg border border-border/50 text-muted-foreground opacity-0 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
                 title="Delete bookmark"
               >
@@ -908,7 +863,10 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
       </div>
 
       {/* Bottom Bar: 1-Click Category Dropdown + Link */}
-      <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3">
+      <div
+        className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-3"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center gap-2 overflow-hidden">
           {item.bookmark ? (
             <DropdownMenu>
@@ -961,6 +919,7 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
             href={item.url}
             target="_blank"
             rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1 font-mono text-[11px] font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
           >
             <span className="max-w-[110px] truncate">
@@ -1017,12 +976,12 @@ export default function BookmarksDirectoryView({
   );
 
   // Active Embed Preview Modal State (Requirement #4 - Memoized to NOT reload on scroll)
-  const [activeEmbedItem, setActiveEmbedItem] = useState<EmbedItem | null>(
-    null,
-  );
+  const [activeEmbedItem, setActiveEmbedItem] = useState<ReturnType<
+    typeof transformBookmark
+  > | null>(null);
 
   const handleOpenEmbed = useCallback(
-    (item: EmbedItem) => {
+    (item: ReturnType<typeof transformBookmark>) => {
       if (session) {
         setActiveEmbedItem(item);
       } else {
@@ -2174,9 +2133,14 @@ export default function BookmarksDirectoryView({
         </div>
       )}
 
-      {/* 4. Live Interactive Embed Modal Dialog */}
+      {/* 4. Post Details Slider Drawer */}
       {activeEmbedItem && (
-        <EmbedModalDialog item={activeEmbedItem} onClose={handleCloseEmbed} />
+        <PostDetailSlider
+          item={activeEmbedItem}
+          onClose={handleCloseEmbed}
+          onSingleCategoryChange={handleSingleCategoryChange}
+          onSingleDelete={handleSingleDelete}
+        />
       )}
 
       {/* 5. Same-Screen Auth Modal for Guest Preview Limit */}
