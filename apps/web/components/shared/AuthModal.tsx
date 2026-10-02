@@ -30,6 +30,7 @@ export function AuthModal({
   const handleAuthSuccess = () => {
     try {
       localStorage.removeItem("guest_preview_count");
+      localStorage.setItem("karakeep_logged_in", "true");
     } catch {
       // Ignore localStorage errors
     }

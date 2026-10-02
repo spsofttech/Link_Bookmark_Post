@@ -2226,6 +2226,23 @@ export default function BookmarksDirectoryView({
     undefined,
   );
 
+  const isLoggedIn = useMemo(() => {
+    if (session) return true;
+    if (typeof window !== "undefined") {
+      const hasAuthCookie =
+        document.cookie.includes("next-auth") ||
+        document.cookie.includes("session") ||
+        document.cookie.includes("auth") ||
+        document.cookie.includes("karakeep");
+      const hasAuthStorage =
+        localStorage.getItem("karakeep_logged_in") === "true";
+      if (hasAuthCookie || hasAuthStorage) return true;
+    }
+    // If user is inside the dashboard with loaded workspace bookmarks, they are authenticated
+    if (bookmarks && bookmarks.length > 0) return true;
+    return false;
+  }, [session, bookmarks]);
+
   // Active Embed Preview Modal State
   const [activeEmbedItem, setActiveEmbedItem] = useState<ReturnType<
     typeof transformBookmark
@@ -2233,7 +2250,7 @@ export default function BookmarksDirectoryView({
 
   const handleOpenEmbed = useCallback(
     (item: ReturnType<typeof transformBookmark>) => {
-      if (session) {
+      if (isLoggedIn) {
         setActiveEmbedItem(item);
       } else {
         try {
@@ -2256,7 +2273,7 @@ export default function BookmarksDirectoryView({
         }
       }
     },
-    [session],
+    [isLoggedIn],
   );
 
   const handleCloseEmbed = useCallback(() => {
