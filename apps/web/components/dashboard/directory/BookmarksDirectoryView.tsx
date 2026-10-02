@@ -1630,19 +1630,9 @@ export default function BookmarksDirectoryView({
                 )}
                 {showSidebar && (
                   <span className="flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
-                    {dbCounts ? (
-                      <span className="font-semibold text-foreground">
-                        {dbCounts.total}
-                      </span>
-                    ) : (
-                      <>
-                        {isFetchingNextPage && (
-                          <Loader2 className="size-2.5 animate-spin" />
-                        )}
-                        {categoryStats.all}
-                        {hasNextPage ? "+" : ""}
-                      </>
-                    )}
+                    <span className="font-semibold text-foreground">
+                      {dbCounts?.total ?? categoryStats.all}
+                    </span>
                   </span>
                 )}
               </button>

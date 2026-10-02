@@ -35,9 +35,8 @@ async function test() {
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(guestCtx);
-    const res = await caller.bookmarks.getBookmarks({});
-    console.log("SUCCESS GUEST BOOKMARKS COUNT:", res.bookmarks.length);
-    console.log("FIRST 3 BOOKMARKS:", res.bookmarks.slice(0, 3).map((b) => b.title));
+    const res = await caller.bookmarks.getBookmarks({ limit: 500 });
+    console.log("EXACT TOTAL BOOKMARKS COUNT WITH LIMIT 500:", res.bookmarks.length);
   } catch (err) {
     console.error("ERROR GUEST CALLER:", err);
   }

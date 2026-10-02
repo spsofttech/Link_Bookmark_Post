@@ -27,11 +27,13 @@ export default async function Bookmarks({
     if (session) {
       bookmarks = await api.bookmarks.getBookmarks({
         ...query,
+        limit: 500,
       });
     } else {
       const guestCaller = await createGuestCaller();
       bookmarks = await guestCaller.bookmarks.getBookmarks({
         ...query,
+        limit: 500,
       });
     }
   } catch (error) {
