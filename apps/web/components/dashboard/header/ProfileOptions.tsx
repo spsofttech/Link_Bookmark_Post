@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { redirect, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useToggleTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import {

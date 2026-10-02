@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/server/api/client";
 import { getServerAuthSession } from "@/server/auth";

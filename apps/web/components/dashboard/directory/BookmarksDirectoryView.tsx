@@ -415,7 +415,7 @@ const TwitterEmbedFrame = memo(function TwitterEmbedFrame({
       <iframe
         src={twitframeUrl}
         title="X / Twitter post"
-        className="h-full w-full min-h-[450px] border-0"
+        className="h-full min-h-[450px] w-full border-0"
         loading="lazy"
       />
     </div>

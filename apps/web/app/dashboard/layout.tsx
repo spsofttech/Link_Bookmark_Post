@@ -17,7 +17,9 @@ export default async function Dashboard({
 }>) {
   const session = await getServerAuthSession();
 
-  const userSettings = session ? await tryCatch(api.users.settings()) : { data: null, error: null };
+  const userSettings = session
+    ? await tryCatch(api.users.settings())
+    : { data: null, error: null };
 
   if (session && userSettings.error) {
     if (userSettings.error instanceof TRPCError) {

@@ -340,12 +340,7 @@ function ThreadsEmbedCard({ url }: { url: string }) {
   );
 }
 
-function TwitterEmbedCard({
-  url,
-}: {
-  url: string;
-  embedUrl?: string;
-}) {
+function TwitterEmbedCard({ url }: { url: string; embedUrl?: string }) {
   const normalizedUrl = (url || "").replace("x.com", "twitter.com");
   const twitframeUrl = `https://twitframe.com/show?url=${encodeURIComponent(normalizedUrl)}`;
 

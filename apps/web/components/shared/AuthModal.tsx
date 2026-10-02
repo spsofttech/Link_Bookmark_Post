@@ -45,13 +45,16 @@ export function AuthModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md overflow-hidden rounded-2xl p-6 sm:p-8">
-        <DialogHeader className="flex flex-col items-center justify-center text-center space-y-2">
+        <DialogHeader className="flex flex-col items-center justify-center space-y-2 text-center">
           <KarakeepLogo height={52} />
           <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-            {tab === "signin" ? "Sign in to Save Content" : "Create your Account"}
+            {tab === "signin"
+              ? "Sign in to Save Content"
+              : "Create your Account"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            {message || "Unlock unlimited post previews, bookmark saving, and AI auto-tagging."}
+            {message ||
+              "Unlock unlimited post previews, bookmark saving, and AI auto-tagging."}
           </DialogDescription>
         </DialogHeader>
 
