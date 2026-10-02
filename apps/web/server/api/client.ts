@@ -74,7 +74,20 @@ export const createGuestCaller = async () => {
   if (session?.user) {
     return api;
   }
-  const defaultUser = await db.query.users.findFirst();
+  let defaultUser = await db.query.users.findFirst({
+    where: (users, { eq }) => eq(users.email, "gajerasiddharth10@gmail.com"),
+  });
+  if (!defaultUser) {
+    const firstBookmark = await db.query.bookmarks.findFirst();
+    if (firstBookmark?.userId) {
+      defaultUser = await db.query.users.findFirst({
+        where: (users, { eq }) => eq(users.id, firstBookmark.userId),
+      });
+    }
+  }
+  if (!defaultUser) {
+    defaultUser = await db.query.users.findFirst();
+  }
   const guestCtx: Context = {
     user: defaultUser
       ? {
