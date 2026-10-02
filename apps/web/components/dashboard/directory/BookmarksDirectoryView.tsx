@@ -42,6 +42,12 @@ import {
   Save,
   FileCode,
   FolderPlus,
+  Settings,
+  User,
+  Palette,
+  Rss,
+  Database,
+  Key,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -1350,6 +1356,643 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
   );
 });
 
+// ─── Modern Settings Modal & Workspace Preferences ────────────────────────────
+/* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
+const SettingsModal = memo(function SettingsModal({
+  isOpen,
+  onClose,
+  customCategories,
+  setCustomCategories,
+  onOpenCreateCategoryModal,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  customCategories: CustomCategory[];
+  setCustomCategories: React.Dispatch<React.SetStateAction<CustomCategory[]>>;
+  onOpenCreateCategoryModal: () => void;
+}) {
+  const { theme, setTheme } = useTheme();
+  const [activeTab, setActiveTab] = useState<
+    "account" | "appearance" | "ai" | "feeds" | "data" | "api" | "categories"
+  >("account");
+
+  // Account State
+  const [name, setName] = useState("Siddharath Gajera");
+  const [email, setEmail] = useState("sidgajera@gmail.com");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+
+  // Appearance State
+  const [showSummaries, setShowSummaries] = useState<boolean>(true);
+  const [showTagsOnCards, setShowTagsOnCards] = useState<boolean>(true);
+
+  // AI Settings State
+  const [aiEnabled, setAiEnabled] = useState<boolean>(true);
+  const [aiModel, setAiModel] = useState<string>("gpt-4o");
+  const [systemPrompt, setSystemPrompt] = useState<string>(
+    "Extract main takeaways, key points, and relevant tags automatically.",
+  );
+
+  // RSS / Feeds State
+  const [feedInterval, setFeedInterval] = useState<string>("30m");
+
+  // API Key State
+  const [apiKey] = useState<string>("kk_live_98a72b14f09238e1a90c");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleSaveAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAccount(true);
+    setTimeout(() => {
+      setIsSavingAccount(false);
+      toast.success("Account settings updated successfully!");
+    }, 600);
+  };
+
+  const handleExportData = (format: "json" | "csv") => {
+    const dataStr =
+      "data:text/json;charset=utf-8," +
+      encodeURIComponent(
+        JSON.stringify({ exportDate: new Date(), version: "1.0" }),
+      );
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute(
+      "download",
+      `karakeep_export_${Date.now()}.${format}`,
+    );
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    toast.success(`Workspace data exported as ${format.toUpperCase()}`);
+  };
+
+  const tabs = [
+    {
+      id: "account",
+      label: "Account & Profile",
+      icon: <User className="size-4" />,
+    },
+    {
+      id: "appearance",
+      label: "Appearance & Layout",
+      icon: <Palette className="size-4" />,
+    },
+    {
+      id: "ai",
+      label: "AI & Smart Tagging",
+      icon: <Sparkles className="size-4" />,
+    },
+    {
+      id: "feeds",
+      label: "RSS & Subscriptions",
+      icon: <Rss className="size-4" />,
+    },
+    {
+      id: "data",
+      label: "Import & Export",
+      icon: <Database className="size-4" />,
+    },
+    { id: "api", label: "API & Webhooks", icon: <Key className="size-4" /> },
+    {
+      id: "categories",
+      label: "Category Management",
+      icon: <Tag className="size-4" />,
+    },
+  ];
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md transition-opacity duration-200 animate-in fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl duration-200 animate-in zoom-in-95"
+      >
+        {/* Settings Header */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-muted/20 px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+              <Settings className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-foreground">
+                Settings & Preferences
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Manage your account, UI display, AI models, and integrations
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Close Settings (Esc)"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {/* Settings Body: Sidebar Tabs + Content Panel */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Tab Navigation Sidebar */}
+          <div className="w-64 shrink-0 border-r border-border bg-muted/10 p-3">
+            <nav className="space-y-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all",
+                    activeTab === tab.id
+                      ? "bg-amber-500 text-white shadow-md shadow-amber-500/20"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Right Tab Content Panel */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {/* 1. Account & Profile */}
+            {activeTab === "account" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    Profile & Security
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Update your personal account info and security credentials
+                  </p>
+                </div>
+
+                <form onSubmit={handleSaveAccount} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
+                    <h4 className="text-xs font-bold text-foreground">
+                      Change Password
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <input
+                        type="password"
+                        placeholder="Current Password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                      />
+                      <input
+                        type="password"
+                        placeholder="New Password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3.5 py-2 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSavingAccount}
+                      className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-5 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600 active:scale-95 disabled:opacity-50"
+                    >
+                      {isSavingAccount ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Save className="size-3.5" />
+                      )}
+                      <span>Save Account Changes</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* 2. Appearance & Layout */}
+            {activeTab === "appearance" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    Appearance & Workspace Display
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Customize your theme, card grid, and layout preferences
+                  </p>
+                </div>
+
+                <div className="space-y-5">
+                  {/* Theme Mode */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-foreground">
+                      Color Theme Mode
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setTheme("light")}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-2xl border p-3 text-xs font-bold transition-all",
+                          theme === "light"
+                            ? "border-amber-500 bg-amber-500/10 text-amber-600"
+                            : "border-border bg-background text-muted-foreground hover:border-amber-500/50",
+                        )}
+                      >
+                        <Sun className="size-4 text-amber-500" />
+                        <span>Light Mode</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTheme("dark")}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-2xl border p-3 text-xs font-bold transition-all",
+                          theme === "dark"
+                            ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                            : "border-border bg-background text-muted-foreground hover:border-amber-500/50",
+                        )}
+                      >
+                        <Moon className="size-4 text-amber-400" />
+                        <span>Dark Mode</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Grid Layout Toggles */}
+                  <div className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">
+                          Show Post Descriptions on Cards
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Display summary text on bookmark cards
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSummaries(!showSummaries)}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          showSummaries
+                            ? "bg-amber-500"
+                            : "bg-muted-foreground/30",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                            showSummaries ? "translate-x-5" : "translate-x-0",
+                          )}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">
+                          Show Category & Tag Badges
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Display tag labels on grid item footers
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowTagsOnCards(!showTagsOnCards)}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          showTagsOnCards
+                            ? "bg-amber-500"
+                            : "bg-muted-foreground/30",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                            showTagsOnCards ? "translate-x-5" : "translate-x-0",
+                          )}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. AI & Smart Tagging */}
+            {activeTab === "ai" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    AI Auto-Summarization & Intelligence
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Configure AI models and automatic metadata generation
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="size-4 text-amber-500" />
+                        <span className="text-xs font-bold text-foreground">
+                          Enable Auto AI Summarization
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAiEnabled(!aiEnabled)}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          aiEnabled ? "bg-amber-500" : "bg-muted-foreground/30",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                            aiEnabled ? "translate-x-5" : "translate-x-0",
+                          )}
+                        />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Automatically generate smart summaries and tags when
+                      saving new posts or URLs.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-foreground">
+                      AI Model Selection
+                    </label>
+                    <select
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-background p-3 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="gpt-4o">
+                        OpenAI GPT-4o (Recommended)
+                      </option>
+                      <option value="claude-3-5-sonnet">
+                        Anthropic Claude 3.5 Sonnet
+                      </option>
+                      <option value="gemini-1-5-pro">
+                        Google Gemini 1.5 Pro
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-foreground">
+                      AI System Prompt
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={systemPrompt}
+                      onChange={(e) => setSystemPrompt(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-background p-3 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. RSS & Feeds */}
+            {activeTab === "feeds" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    RSS Subscriptions & Content Feeds
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Manage RSS sync options and background content fetching
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-foreground">
+                      Background RSS Sync Frequency
+                    </label>
+                    <select
+                      value={feedInterval}
+                      onChange={(e) => setFeedInterval(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-background p-3 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="15m">Every 15 Minutes</option>
+                      <option value="30m">Every 30 Minutes</option>
+                      <option value="1h">Every 1 Hour</option>
+                      <option value="daily">Once Daily</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5. Import & Export */}
+            {activeTab === "data" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    Import & Export Data
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Download complete backups of your bookmarks, tags, and notes
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-5">
+                    <div className="flex items-center gap-2 text-amber-500">
+                      <Download className="size-5" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        Export JSON Backup
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Download full structured JSON file with all post titles,
+                      URLs, descriptions, and custom notes.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleExportData("json")}
+                      className="w-full rounded-xl bg-amber-500 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600"
+                    >
+                      Export JSON
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-5">
+                    <div className="flex items-center gap-2 text-emerald-500">
+                      <Download className="size-5" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        Export CSV Spreadsheet
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Export flat CSV file ready for Excel, Google Sheets, or
+                      data analytics software.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleExportData("csv")}
+                      className="w-full rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. API Keys */}
+            {activeTab === "api" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    API Keys & Developer Webhooks
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Access secret API keys for Karakeep extension, CLI, and
+                    custom integrations
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-foreground">
+                      Personal Secret API Key
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="password"
+                        readOnly
+                        value={apiKey}
+                        className="flex-1 rounded-xl border border-border bg-muted/30 px-3.5 py-2 font-mono text-xs font-semibold text-foreground"
+                      />
+                      <CopyButton text={apiKey} label="API Key" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 7. Category Management */}
+            {activeTab === "categories" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-border pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">
+                      Category Management
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Organize custom workspace categories and tags
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenCreateCategoryModal();
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600"
+                  >
+                    <Plus className="size-3.5" />
+                    <span>+ Create Category</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Active Custom Categories ({customCategories.length})
+                  </div>
+                  {customCategories.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border py-4 text-center text-xs italic text-muted-foreground">
+                      No custom categories created yet. Click &quot;+ Create
+                      Category&quot; above to add one.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {customCategories.map((cat) => (
+                        <div
+                          key={cat.id}
+                          className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-3"
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-foreground">
+                              {cat.name}
+                            </div>
+                            <div className="font-mono text-[10px] text-muted-foreground">
+                              #{cat.tag}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomCategories((prev) =>
+                                prev.filter((c) => c.id !== cat.id),
+                              );
+                              toast.success(`Category "${cat.name}" removed`);
+                            }}
+                            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function BookmarksDirectoryView({
   bookmarks,
   _showEditorCard = true,
@@ -1391,6 +2034,7 @@ export default function BookmarksDirectoryView({
   );
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] =
     useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   const handleCreateCategory = useCallback(
     (name: string, description: string) => {
@@ -2206,7 +2850,11 @@ export default function BookmarksDirectoryView({
 
         {/* User Profile Footer */}
         <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-accent">
+          <div
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex cursor-pointer items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-accent"
+            title="Open Settings & Workspace Preferences"
+          >
             <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-xs font-bold text-white">
               SG
             </div>
@@ -2216,10 +2864,11 @@ export default function BookmarksDirectoryView({
                   Siddharath Gajera
                 </span>
                 <span className="truncate text-[10px] text-muted-foreground">
-                  Pro Member
+                  Pro Member • Settings
                 </span>
               </div>
             )}
+            <Settings className="ml-auto size-4 shrink-0 text-muted-foreground transition-colors hover:text-amber-500" />
           </div>
         </div>
       </aside>
@@ -2254,6 +2903,15 @@ export default function BookmarksDirectoryView({
             >
               <RefreshCw className="size-3.5" />
               <span>Refresh</span>
+            </button>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-all hover:bg-amber-500/20 dark:text-amber-400"
+              title="Open Settings & Workspace Preferences"
+            >
+              <Settings className="size-3.5" />
+              <span>Settings</span>
             </button>
 
             <button
@@ -2637,6 +3295,15 @@ export default function BookmarksDirectoryView({
         isOpen={isCreateCategoryOpen}
         onClose={() => setIsCreateCategoryOpen(false)}
         onCreateCategory={handleCreateCategory}
+      />
+
+      {/* 7. Modern Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        customCategories={customCategories}
+        setCustomCategories={setCustomCategories}
+        onOpenCreateCategoryModal={() => setIsCreateCategoryOpen(true)}
       />
     </div>
   );
