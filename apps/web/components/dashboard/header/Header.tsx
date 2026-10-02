@@ -8,9 +8,6 @@ import { getServerAuthSession } from "@/server/auth";
 
 export default async function Header() {
   const session = await getServerAuthSession();
-  if (!session) {
-    redirect("/");
-  }
 
   return (
     <header className="sticky left-0 right-0 top-0 z-50 flex h-16 w-full items-center justify-between overflow-x-auto overflow-y-hidden bg-background p-4 shadow">

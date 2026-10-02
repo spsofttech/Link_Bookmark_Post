@@ -19,20 +19,19 @@ export default async function Bookmarks({
   showEditorCard?: boolean;
 }) {
   const session = await getServerAuthSession();
-  if (!session) {
-    redirect("/");
-  }
 
   let bookmarks: Awaited<ReturnType<typeof api.bookmarks.getBookmarks>> = {
     bookmarks: [],
     nextCursor: null,
   };
-  try {
-    bookmarks = await api.bookmarks.getBookmarks({
-      ...query,
-    });
-  } catch (error) {
-    console.error("Failed to fetch initial bookmarks:", error);
+  if (session) {
+    try {
+      bookmarks = await api.bookmarks.getBookmarks({
+        ...query,
+      });
+    } catch (error) {
+      console.error("Failed to fetch initial bookmarks:", error);
+    }
   }
 
   return (

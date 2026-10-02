@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { redirect, useRouter } from "next/navigation";
 import { useToggleTheme } from "@/components/theme-provider";
@@ -56,6 +56,8 @@ function DarkModeToggle() {
   }
 }
 
+import { AuthModal } from "@/components/shared/AuthModal";
+
 export default function SidebarProfileOptions() {
   const { t } = useTranslation();
   const toggleTheme = useToggleTheme();
@@ -68,11 +70,27 @@ export default function SidebarProfileOptions() {
   const setShortcutsDialogOpen = useKeyboardNavigationStore(
     (state) => state.setShortcutsDialogOpen,
   );
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const avatarImage = whoami?.image ?? null;
   const avatarUrl = useMemo(() => avatarImage ?? null, [avatarImage]);
 
-  if (!session) return redirect("/");
+  if (!session) {
+    return (
+      <>
+        <Button
+          onClick={() => setAuthModalOpen(true)}
+          className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow transition hover:opacity-90"
+        >
+          Sign In / Sign Up
+        </Button>
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <DropdownMenu>

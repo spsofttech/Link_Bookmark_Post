@@ -16,13 +16,10 @@ export default async function Dashboard({
   modal: React.ReactNode;
 }>) {
   const session = await getServerAuthSession();
-  if (!session) {
-    redirect("/");
-  }
 
-  const userSettings = await tryCatch(api.users.settings());
+  const userSettings = session ? await tryCatch(api.users.settings()) : { data: null, error: null };
 
-  if (userSettings.error) {
+  if (session && userSettings.error) {
     if (userSettings.error instanceof TRPCError) {
       if (
         userSettings.error.code === "NOT_FOUND" ||

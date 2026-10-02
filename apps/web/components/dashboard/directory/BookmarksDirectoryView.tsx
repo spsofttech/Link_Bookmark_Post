@@ -59,6 +59,8 @@ import {
   useUpdateBookmarkTags,
 } from "@karakeep/shared-react/hooks/bookmarks";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth/client";
+import { AuthModal } from "@/components/shared/AuthModal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -401,46 +403,20 @@ function transformBookmark(b: ZBookmark, index: number) {
 // ─── Twitter/X official oEmbed widget component (Memoized) ───────────────────
 const TwitterEmbedFrame = memo(function TwitterEmbedFrame({
   url,
-  tweetId: _tweetId,
 }: {
   url: string;
   tweetId: string | null;
 }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    if (!iframeRef.current) return;
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    body { margin:0; background:#15202b; display:flex; align-items:flex-start;
-           justify-content:center; padding:16px; min-height:100vh; box-sizing:border-box; }
-    .twitter-tweet { max-width:550px!important; width:100%!important; }
-  </style>
-</head>
-<body>
-  <blockquote class="twitter-tweet" data-dnt="true" data-theme="dark">
-    <a href="${url.replace(/"/g, "&quot;")}"></a>
-  </blockquote>
-  <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
-</body>
-</html>`;
-    const blob = new Blob([html], { type: "text/html" });
-    const blobUrl = URL.createObjectURL(blob);
-    iframeRef.current.src = blobUrl;
-    return () => URL.revokeObjectURL(blobUrl);
-  }, [url]);
+  const normalizedUrl = (url || "").replace("x.com", "twitter.com");
+  const twitframeUrl = `https://twitframe.com/show?url=${encodeURIComponent(normalizedUrl)}`;
 
   return (
     <div className="flex h-full w-full flex-col items-center overflow-y-auto bg-[#15202b]">
       <iframe
-        ref={iframeRef}
+        src={twitframeUrl}
         title="X / Twitter post"
-        className="h-full w-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        className="h-full w-full min-h-[450px] border-0"
+        loading="lazy"
       />
     </div>
   );
@@ -1034,14 +1010,44 @@ export default function BookmarksDirectoryView({
   // Client-side pagination (display chunks)
   const [displayPage, setDisplayPage] = useState<number>(1);
 
+  const { data: session } = useSession();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMessage, setAuthModalMessage] = useState<string | undefined>(
+    undefined,
+  );
+
   // Active Embed Preview Modal State (Requirement #4 - Memoized to NOT reload on scroll)
   const [activeEmbedItem, setActiveEmbedItem] = useState<EmbedItem | null>(
     null,
   );
 
-  const handleOpenEmbed = useCallback((item: EmbedItem) => {
-    setActiveEmbedItem(item);
-  }, []);
+  const handleOpenEmbed = useCallback(
+    (item: EmbedItem) => {
+      if (session) {
+        setActiveEmbedItem(item);
+      } else {
+        try {
+          const rawCount = localStorage.getItem("guest_preview_count");
+          const count = rawCount ? parseInt(rawCount, 10) : 0;
+          if (count < 3) {
+            localStorage.setItem("guest_preview_count", String(count + 1));
+            setActiveEmbedItem(item);
+            toast.info(
+              `Guest Preview ${count + 1}/3. Sign in for unlimited previews.`,
+            );
+          } else {
+            setAuthModalMessage(
+              "You have reached your 3 free previews. Please sign in or create an account to continue previewing posts.",
+            );
+            setAuthModalOpen(true);
+          }
+        } catch {
+          setActiveEmbedItem(item);
+        }
+      }
+    },
+    [session],
+  );
 
   const handleCloseEmbed = useCallback(() => {
     setActiveEmbedItem(null);
@@ -2181,6 +2187,13 @@ export default function BookmarksDirectoryView({
       {activeEmbedItem && (
         <EmbedModalDialog item={activeEmbedItem} onClose={handleCloseEmbed} />
       )}
+
+      {/* 5. Same-Screen Auth Modal for Guest Preview Limit */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        message={authModalMessage}
+      />
     </div>
   );
 }

@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "Save Content",
   applicationName: "Save Content",
   description:
-    "The Bookmark Everything app. Hoard links, notes, and images and they will get automatically tagged AI.",
+    "The Bookmark Everything app. Save links, notes, and images and get them automatically tagged with AI.",
   icons: {
     icon: [
       {

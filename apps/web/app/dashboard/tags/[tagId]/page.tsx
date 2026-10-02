@@ -16,11 +16,11 @@ export async function generateMetadata(props: {
   try {
     const tag = await api.tags.get({ tagId: params.tagId });
     return {
-      title: `${tag.name} | Karakeep`,
+      title: `${tag.name} | Save Content`,
     };
   } catch {
     return {
-      title: `${decodedName} | Karakeep`,
+      title: `${decodedName} | Save Content`,
     };
   }
 }

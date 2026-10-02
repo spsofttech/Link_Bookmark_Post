@@ -76,7 +76,7 @@ export default function GlobalProcessLoader() {
       <div className="h-1 w-full overflow-hidden bg-transparent">
         <div
           className={cn(
-            "h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 shadow-sm shadow-blue-500/50 transition-all duration-300 ease-out",
+            "h-full bg-primary shadow-sm shadow-primary/40 transition-all duration-300 ease-out",
             navigating && "animate-pulse",
           )}
           style={{
@@ -87,12 +87,12 @@ export default function GlobalProcessLoader() {
 
       {/* Top Right Floating Activity Spinner */}
       {(isFetching > 0 || isMutating > 0 || navigating) && (
-        <div className="pointer-events-auto absolute right-4 top-3 flex items-center gap-2 rounded-full border border-amber-500/30 bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xl backdrop-blur duration-200 animate-in fade-in slide-in-from-top-2">
-          <div className="flex size-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+        <div className="pointer-events-auto absolute right-4 top-3 flex items-center gap-2.5 rounded-full border border-border/80 bg-popover/90 px-3.5 py-1.5 text-xs font-medium text-popover-foreground shadow-lg backdrop-blur-md duration-200 animate-in fade-in slide-in-from-top-2">
+          <div className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Loader2 className="size-3.5 animate-spin" />
           </div>
-          <span className="font-mono text-amber-400">Save Content</span>
-          <span className="text-slate-300">
+          <span className="font-semibold text-foreground">Save Content</span>
+          <span className="text-muted-foreground">
             {navigating
               ? "Navigating..."
               : isMutating > 0

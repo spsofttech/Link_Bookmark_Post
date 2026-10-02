@@ -33,7 +33,11 @@ const OAUTH_FAILED = "OAuth login failed: ";
 
 const VERIFY_EMAIL_ERROR = "Please verify your email address before signing in";
 
-export default function CredentialsForm() {
+export default function CredentialsForm({
+  onSuccess,
+}: {
+  onSuccess?: () => void;
+} = {}) {
   const [signinError, setSigninError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -90,7 +94,7 @@ export default function CredentialsForm() {
             </span>
           </div>
           <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
-            <div className="h-full animate-[progress_1.5s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+            <div className="h-full animate-[progress_1.5s_ease-in-out_infinite] rounded-full bg-primary" />
           </div>
         </div>
       )}
@@ -120,7 +124,11 @@ export default function CredentialsForm() {
               }
               // Show branded loading overlay and navigate with fresh session cookies
               setIsRedirecting(true);
-              window.location.href = "/dashboard/bookmarks";
+              if (onSuccess) {
+                onSuccess();
+              } else {
+                window.location.href = "/dashboard/bookmarks";
+              }
             } catch (err) {
               setIsLoading(false);
               setSigninError(

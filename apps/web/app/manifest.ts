@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Save Content",
     short_name: "Save Content",
     description:
-      "The Bookmark Everything app. Hoard links, notes, and images and they will get automatically tagged AI.",
+      "The Bookmark Everything app. Save links, notes, and images and get them automatically tagged with AI.",
     background_color: "#ffffff",
     theme_color: "#ffffff",
     start_url: "/",
