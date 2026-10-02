@@ -1364,12 +1364,14 @@ const SettingsModal = memo(function SettingsModal({
   customCategories,
   setCustomCategories,
   onOpenCreateCategoryModal,
+  bookmarks,
 }: {
   isOpen: boolean;
   onClose: () => void;
   customCategories: CustomCategory[];
   setCustomCategories: React.Dispatch<React.SetStateAction<CustomCategory[]>>;
   onOpenCreateCategoryModal: () => void;
+  bookmarks: ZBookmark[];
 }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
@@ -1421,22 +1423,138 @@ const SettingsModal = memo(function SettingsModal({
     }, 600);
   };
 
-  const handleExportData = (format: "json" | "csv") => {
-    const dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(
-        JSON.stringify({ exportDate: new Date(), version: "1.0" }),
+  const handleExportData = async (format: "json" | "csv" | "excel") => {
+    try {
+      const apiFormat = format === "excel" ? "excel" : format;
+      const res = await fetch(`/api/bookmarks/export?format=${apiFormat}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const match = res.headers
+          .get("Content-Disposition")
+          ?.match(/filename\*?=(?:UTF-8''|")?([^"]+)/i);
+        const ext = format === "excel" ? "xlsx" : format;
+        const filename = match
+          ? match[1].replace(/^"+|"+$/g, "")
+          : `karakeep_export_${new Date().toISOString().split("T")[0]}.${ext}`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast.success(
+          `Exported workspace data as ${format.toUpperCase()} successfully!`,
+        );
+        return;
+      }
+    } catch {
+      // ignore network errors and fallback to client-side generator
+    }
+
+    if (!bookmarks || bookmarks.length === 0) {
+      toast.error("No bookmarks found in workspace to export.");
+      return;
+    }
+
+    const dateStr = new Date().toISOString().split("T")[0];
+
+    if (format === "json") {
+      const jsonContent = JSON.stringify(
+        {
+          exportVersion: "1.0",
+          exportDate: new Date().toISOString(),
+          totalCount: bookmarks.length,
+          bookmarks: bookmarks.map((b) => ({
+            id: b.id,
+            title: getBookmarkTitle(b),
+            url: getSourceUrl(b) || "",
+            summary: b.summary || "",
+            note: b.note || "",
+            tags: b.tags?.map((t) => t.name) || [],
+            createdAt: b.createdAt,
+          })),
+        },
+        null,
+        2,
       );
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute(
-      "download",
-      `karakeep_export_${Date.now()}.${format}`,
-    );
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    toast.success(`Workspace data exported as ${format.toUpperCase()}`);
+
+      const blob = new Blob([jsonContent], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `karakeep_export_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${bookmarks.length} items to JSON successfully!`);
+    } else {
+      // Excel / CSV Export
+      const escapeCsv = (str: string | null | undefined) => {
+        if (!str) return '""';
+        const clean = String(str).replace(/"/g, '""');
+        return `"${clean}"`;
+      };
+
+      const headers = [
+        "ID",
+        "Title",
+        "URL",
+        "Category",
+        "Summary / Description",
+        "Notes",
+        "Tags",
+        "Created At",
+      ];
+
+      const rows = bookmarks.map((b) => {
+        const title = getBookmarkTitle(b);
+        const url = getSourceUrl(b) || "";
+        const summary = b.summary || "";
+        const note = b.note || "";
+        const categoryTag = b.tags?.[0]?.name || "uncategorized";
+        const tags = (b.tags?.map((t) => t.name) || []).join("; ");
+        const createdAt = b.createdAt
+          ? new Date(b.createdAt).toLocaleString()
+          : "";
+
+        return [
+          escapeCsv(b.id),
+          escapeCsv(title),
+          escapeCsv(url),
+          escapeCsv(categoryTag),
+          escapeCsv(summary),
+          escapeCsv(note),
+          escapeCsv(tags),
+          escapeCsv(createdAt),
+        ].join(",");
+      });
+
+      // Include \uFEFF UTF-8 BOM byte so Microsoft Excel opens formatted columns automatically
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+
+      const blob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `karakeep_export_${dateStr}.${format === "excel" ? "csv" : format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(
+        `Exported ${bookmarks.length} items to ${format.toUpperCase()} spreadsheet successfully!`,
+      );
+    }
   };
 
   const tabs = [
@@ -1842,7 +1960,7 @@ const SettingsModal = memo(function SettingsModal({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-5">
                     <div className="flex items-center gap-2 text-amber-500">
                       <Download className="size-5" />
@@ -1851,8 +1969,8 @@ const SettingsModal = memo(function SettingsModal({
                       </h4>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Download full structured JSON file with all post titles,
-                      URLs, descriptions, and custom notes.
+                      Full structured JSON backup with all post titles, URLs,
+                      descriptions, and notes ({bookmarks?.length || 0} items).
                     </p>
                     <button
                       type="button"
@@ -1864,22 +1982,42 @@ const SettingsModal = memo(function SettingsModal({
                   </div>
 
                   <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-5">
-                    <div className="flex items-center gap-2 text-emerald-500">
+                    <div className="flex items-center gap-2 text-blue-500">
                       <Download className="size-5" />
                       <h4 className="text-xs font-bold text-foreground">
-                        Export CSV Spreadsheet
+                        Export Excel (.xlsx)
                       </h4>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Export flat CSV file ready for Excel, Google Sheets, or
-                      data analytics software.
+                      Formatted Excel spreadsheet workbook containing all
+                      workspace bookmarks and categories.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleExportData("excel")}
+                      className="w-full rounded-xl bg-blue-600 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-blue-700"
+                    >
+                      Export Excel (.xlsx)
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-5">
+                    <div className="flex items-center gap-2 text-emerald-500">
+                      <Download className="size-5" />
+                      <h4 className="text-xs font-bold text-foreground">
+                        Export CSV (.csv)
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Flat UTF-8 CSV spreadsheet compatible with Excel, Google
+                      Sheets, and analytics.
                     </p>
                     <button
                       type="button"
                       onClick={() => handleExportData("csv")}
                       className="w-full rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-emerald-700"
                     >
-                      Export CSV
+                      Export CSV (.csv)
                     </button>
                   </div>
                 </div>
@@ -3304,6 +3442,7 @@ export default function BookmarksDirectoryView({
         customCategories={customCategories}
         setCustomCategories={setCustomCategories}
         onOpenCreateCategoryModal={() => setIsCreateCategoryOpen(true)}
+        bookmarks={bookmarks}
       />
     </div>
   );
