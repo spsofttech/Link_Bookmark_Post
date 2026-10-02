@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Karakeep",
-    short_name: "Karakeep",
+    name: "Save Content",
+    short_name: "Save Content",
     description:
       "The Bookmark Everything app. Hoard links, notes, and images and they will get automatically tagged AI.",
     background_color: "#ffffff",
@@ -47,14 +47,14 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "3840x2307",
         type: "image/png",
         form_factor: "wide",
-        label: "Karakeep desktop bookmark library",
+        label: "Save Content desktop bookmark library",
       },
       {
         src: "/screenshots/mobile.png",
         sizes: "692x1498",
         type: "image/png",
         form_factor: "narrow",
-        label: "Karakeep mobile bookmark library",
+        label: "Save Content mobile bookmark library",
       },
     ],
   };

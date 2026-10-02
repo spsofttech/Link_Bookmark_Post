@@ -87,9 +87,12 @@ export default function GlobalProcessLoader() {
 
       {/* Top Right Floating Activity Spinner */}
       {(isFetching > 0 || isMutating > 0 || navigating) && (
-        <div className="pointer-events-auto absolute right-4 top-3 flex items-center gap-2 rounded-full border border-border bg-background/90 px-3.5 py-1.5 text-xs font-semibold text-foreground shadow-lg backdrop-blur duration-200 animate-in fade-in slide-in-from-top-2">
-          <Loader2 className="size-4 animate-spin text-primary" />
-          <span>
+        <div className="pointer-events-auto absolute right-4 top-3 flex items-center gap-2 rounded-full border border-amber-500/30 bg-slate-900/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xl backdrop-blur duration-200 animate-in fade-in slide-in-from-top-2">
+          <div className="flex size-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+            <Loader2 className="size-3.5 animate-spin" />
+          </div>
+          <span className="font-mono text-amber-400">Save Content</span>
+          <span className="text-slate-300">
             {navigating
               ? "Navigating..."
               : isMutating > 0
