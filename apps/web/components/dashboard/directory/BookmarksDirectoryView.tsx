@@ -2253,24 +2253,10 @@ export default function BookmarksDirectoryView({
       if (isLoggedIn) {
         setActiveEmbedItem(item);
       } else {
-        try {
-          const rawCount = localStorage.getItem("guest_preview_count");
-          const count = rawCount ? parseInt(rawCount, 10) : 0;
-          if (count < 3) {
-            localStorage.setItem("guest_preview_count", String(count + 1));
-            setActiveEmbedItem(item);
-            toast.info(
-              `Guest Preview ${count + 1}/3. Sign in for unlimited previews.`,
-            );
-          } else {
-            setAuthModalMessage(
-              "You have reached your 3 free previews. Please sign in or create an account to continue previewing posts.",
-            );
-            setAuthModalOpen(true);
-          }
-        } catch {
-          setActiveEmbedItem(item);
-        }
+        setAuthModalMessage(
+          "Please sign in or create an account to preview post details.",
+        );
+        setAuthModalOpen(true);
       }
     },
     [isLoggedIn],
