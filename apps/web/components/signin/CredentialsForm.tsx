@@ -141,18 +141,21 @@ export default function CredentialsForm() {
             control={form.control}
             name="email"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Email Address
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="email"
                     autoComplete="email"
                     spellCheck={false}
-                    placeholder="Enter your email"
+                    placeholder="name@example.com"
+                    className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                     {...field}
                   />
                 </FormControl>
-                <FormMessage />
+                <FormMessage className="text-xs text-rose-400" />
               </FormItem>
             )}
           />
@@ -161,21 +164,31 @@ export default function CredentialsForm() {
             control={form.control}
             name="password"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
+              <FormItem className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Password
+                  </FormLabel>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-amber-400 transition-colors hover:text-amber-300 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <FormControl>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
-                      placeholder="Enter your password"
-                      className="pr-10"
+                      placeholder="••••••••"
+                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                       {...field}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
                       tabIndex={-1}
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
@@ -189,7 +202,7 @@ export default function CredentialsForm() {
                     </button>
                   </div>
                 </FormControl>
-                <FormMessage />
+                <FormMessage className="text-xs text-rose-400" />
               </FormItem>
             )}
           />
@@ -199,35 +212,26 @@ export default function CredentialsForm() {
             type="submit"
             loading={isPending}
             disabled={isPending}
-            className="w-full"
+            className="h-11 w-full rounded-xl border-0 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-bold text-slate-950 shadow-lg shadow-amber-500/25 transition-all duration-200 hover:scale-[1.01] hover:from-amber-400 hover:to-amber-300 active:scale-[0.99]"
           >
             {isPending ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
                 <span>Signing in...</span>
               </span>
             ) : (
               "Sign In"
             )}
           </ActionButton>
-
-          <div className="text-center">
-            <Link
-              href="/forgot-password"
-              className="text-sm text-muted-foreground underline hover:text-primary"
-            >
-              Forgot your password?
-            </Link>
-          </div>
         </form>
       </Form>
 
-      <div className="text-center">
-        <p className="text-sm text-gray-600">
+      <div className="pt-2 text-center">
+        <p className="text-sm text-slate-400">
           Don&apos;t have an account?{" "}
           <Link
             href="/signup"
-            className="font-medium text-blue-600 hover:text-blue-500"
+            className="font-semibold text-amber-400 transition-colors hover:text-amber-300 hover:underline"
           >
             Sign up
           </Link>

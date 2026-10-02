@@ -103,36 +103,49 @@ export default function VerifyEmailPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-12 font-sans text-slate-100 sm:px-6 lg:px-8">
+      {/* Glowing Ambient Background Elements */}
+      <div className="pointer-events-none absolute -left-32 -top-32 size-96 rounded-full bg-amber-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 size-96 rounded-full bg-purple-600/15 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 size-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/5 blur-[120px]" />
+
+      <Card className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border-amber-500/20 bg-slate-900/80 shadow-2xl shadow-amber-500/10 backdrop-blur-xl">
+        <CardHeader className="pb-4 pt-8 text-center">
+          <CardTitle className="text-3xl font-extrabold tracking-tight text-white">
             Email Verification
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="mt-1 text-sm text-slate-400">
             {status === "loading" && "Verifying your email address..."}
             {status === "success" && "Email verified successfully!"}
             {status === "error" && "Verification failed"}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6 px-6 pb-8">
           {status === "loading" && (
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="flex flex-col items-center justify-center gap-3 py-6">
+              <Loader2 className="h-10 w-10 animate-spin text-amber-400" />
+              <p className="text-sm text-slate-400">
+                Verifying secure token...
+              </p>
             </div>
           )}
 
           {status === "success" && (
             <>
-              <div className="flex items-center justify-center">
-                <CheckCircle className="h-12 w-12 text-green-600" />
+              <div className="flex items-center justify-center py-2">
+                <div className="flex size-16 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                  <CheckCircle className="h-8 w-8" />
+                </div>
               </div>
-              <Alert>
-                <AlertDescription className="text-center">
+              <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+                <AlertDescription className="text-center text-sm">
                   {message}
                 </AlertDescription>
               </Alert>
-              <Button onClick={handleSignIn} className="w-full">
+              <Button
+                onClick={handleSignIn}
+                className="h-11 w-full rounded-xl border-0 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-bold text-slate-950 shadow-lg shadow-amber-500/25"
+              >
                 {isMobileRedirect ? "Open App" : "Sign In"}
               </Button>
             </>
@@ -140,25 +153,30 @@ export default function VerifyEmailPage() {
 
           {status === "error" && (
             <>
-              <div className="flex items-center justify-center">
-                <XCircle className="h-12 w-12 text-red-600" />
+              <div className="flex items-center justify-center py-2">
+                <div className="flex size-16 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-400">
+                  <XCircle className="h-8 w-8" />
+                </div>
               </div>
-              <Alert variant="destructive">
-                <AlertDescription className="text-center">
+              <Alert
+                variant="destructive"
+                className="border-rose-500/30 bg-rose-500/10 text-rose-300"
+              >
+                <AlertDescription className="text-center text-sm">
                   {message}
                 </AlertDescription>
               </Alert>
               {email && (
-                <div className="space-y-2">
+                <div className="space-y-3 pt-2">
                   <Button
                     onClick={handleResendEmail}
                     variant="outline"
-                    className="w-full"
+                    className="h-11 w-full rounded-xl border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-900 hover:text-white"
                     disabled={resendEmailMutation.isPending}
                   >
                     {resendEmailMutation.isPending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-amber-400" />
                         Sending...
                       </>
                     ) : (
@@ -168,7 +186,7 @@ export default function VerifyEmailPage() {
                   <Button
                     onClick={handleSignIn}
                     variant="ghost"
-                    className="w-full"
+                    className="w-full text-slate-400 hover:bg-transparent hover:text-amber-400"
                   >
                     Back to Sign In
                   </Button>

@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import KarakeepLogo from "@/components/KarakeepIcon";
 import ResetPasswordForm from "@/components/signin/ResetPasswordForm";
 import { getServerAuthSession } from "@/server/auth";
 
@@ -18,11 +17,13 @@ export default async function ResetPasswordPage({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8">
-        <div className="flex items-center justify-center">
-          <KarakeepLogo height={80} />
-        </div>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-12 font-sans text-slate-100 sm:px-6 lg:px-8">
+      {/* Glowing Ambient Background Elements */}
+      <div className="pointer-events-none absolute -left-32 -top-32 size-96 rounded-full bg-amber-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -right-32 size-96 rounded-full bg-purple-600/15 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 size-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/5 blur-[120px]" />
+
+      <div className="relative z-10 w-full max-w-md space-y-6">
         <ResetPasswordForm token={token} />
       </div>
     </div>

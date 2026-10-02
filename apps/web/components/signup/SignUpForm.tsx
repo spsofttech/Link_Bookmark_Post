@@ -29,7 +29,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { useMutation } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { AlertCircle, Eye, EyeOff, UserX } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Sparkles, UserX } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -98,16 +98,20 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">
+    <Card className="w-full overflow-hidden rounded-2xl border-amber-500/20 bg-slate-900/80 shadow-2xl shadow-amber-500/10 backdrop-blur-xl">
+      <CardHeader className="pb-4 pt-8 text-center">
+        <div className="mx-auto mb-3 flex items-center justify-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
+          <Sparkles className="size-3.5" />
+          <span>Join Karakeep Platform</span>
+        </div>
+        <CardTitle className="text-3xl font-extrabold tracking-tight text-white">
           Create Your Account
         </CardTitle>
-        <CardDescription>
-          Join Karakeep to start organizing your bookmarks
+        <CardDescription className="mt-1 text-sm text-slate-400">
+          Join Karakeep to start organizing your AI templates & bookmarks
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 px-6 pb-8">
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(async (value) => {
@@ -170,8 +174,11 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
             className="space-y-4"
           >
             {errorMessage && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
+              <Alert
+                variant="destructive"
+                className="border-rose-500/30 bg-rose-500/10 text-rose-300"
+              >
+                <AlertCircle className="h-4 w-4 text-rose-400" />
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             )}
@@ -180,16 +187,19 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Full Name
+                  </FormLabel>
                   <FormControl>
                     <Input
                       type="text"
-                      placeholder="Enter your full name"
+                      placeholder="Alex Morgan"
+                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs text-rose-400" />
                 </FormItem>
               )}
             />
@@ -198,16 +208,19 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               control={form.control}
               name="email"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Email Address
+                  </FormLabel>
                   <FormControl>
                     <Input
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder="name@example.com"
+                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs text-rose-400" />
                 </FormItem>
               )}
             />
@@ -216,20 +229,22 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               control={form.control}
               name="password"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Password
+                  </FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input
                         type={showPassword ? "text" : "password"}
-                        placeholder="Create a password"
-                        className="pr-10"
+                        placeholder="••••••••"
+                        className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                         {...field}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
                         tabIndex={-1}
                         aria-label={
                           showPassword ? "Hide password" : "Show password"
@@ -243,7 +258,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                       </button>
                     </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs text-rose-400" />
                 </FormItem>
               )}
             />
@@ -252,14 +267,16 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               control={form.control}
               name="confirmPassword"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Confirm Password
+                  </FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input
                         type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        className="pr-10"
+                        placeholder="••••••••"
+                        className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
                         {...field}
                       />
                       <button
@@ -267,7 +284,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                         onClick={() =>
                           setShowConfirmPassword(!showConfirmPassword)
                         }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
                         tabIndex={-1}
                         aria-label={
                           showConfirmPassword
@@ -283,7 +300,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                       </button>
                     </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs text-rose-400" />
                 </FormItem>
               )}
             />
@@ -294,7 +311,9 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                 name="turnstileToken"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Verification</FormLabel>
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                      Verification
+                    </FormLabel>
                     <FormControl>
                       <Turnstile
                         ref={turnstileRef}
@@ -314,7 +333,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                         }}
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage className="text-xs text-rose-400" />
                   </FormItem>
                 )}
               />
@@ -325,14 +344,14 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
               loading={
                 form.formState.isSubmitting || createUserMutation.isPending
               }
-              className="w-full"
+              className="h-11 w-full rounded-xl border-0 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-bold text-slate-950 shadow-lg shadow-amber-500/25 transition-all duration-200 hover:scale-[1.01] hover:from-amber-400 hover:to-amber-300 active:scale-[0.99]"
             >
               Sign up
             </ActionButton>
 
             {(clientConfig.legal.termsOfServiceUrl ||
               clientConfig.legal.privacyPolicyUrl) && (
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-xs text-slate-400">
                 By clicking on &apos;Sign up&apos; above, you are agreeing to
                 the{" "}
                 {clientConfig.legal.termsOfServiceUrl && (
@@ -340,7 +359,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                     href={clientConfig.legal.termsOfServiceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-foreground"
+                    className="text-amber-400 underline hover:text-amber-300"
                   >
                     Terms of Service
                   </Link>
@@ -353,7 +372,7 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
                     href={clientConfig.legal.privacyPolicyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-foreground"
+                    className="text-amber-400 underline hover:text-amber-300"
                   >
                     Privacy Policy
                   </Link>
@@ -364,12 +383,12 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
           </form>
         </Form>
 
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
+        <div className="pt-2 text-center">
+          <p className="text-sm text-slate-400">
             Already have an account?{" "}
             <Link
               href="/signin"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-semibold text-amber-400 transition-colors hover:text-amber-300 hover:underline"
             >
               Sign in
             </Link>
