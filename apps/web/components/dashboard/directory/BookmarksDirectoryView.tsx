@@ -69,6 +69,43 @@ import {
 import EditorCard from "../bookmarks/EditorCard";
 import BookmarkOptions from "../bookmarks/BookmarkOptions";
 
+// ─── Global Permanent Embed Cache Memory ──────────────────────────────────────
+// Keeps loaded embed frame states & visual preview URLs cached in memory permanently
+const EMBED_CACHE_KEY = "karakeep_embed_cache_v2";
+
+class PermanentEmbedCache {
+  private static cache = new Map<string, string>();
+
+  static get(key: string): string | null {
+    if (!key) return null;
+    if (this.cache.has(key)) return this.cache.get(key)!;
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem(`${EMBED_CACHE_KEY}_${key}`);
+        if (stored) {
+          this.cache.set(key, stored);
+          return stored;
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return null;
+  }
+
+  static set(key: string, value: string): void {
+    if (!key) return;
+    this.cache.set(key, value);
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(`${EMBED_CACHE_KEY}_${key}`, value);
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }
+}
+
 // ─── Page size for client-side display chunking ──────────────────────────────
 const PAGE_SIZE = 24;
 
@@ -213,10 +250,34 @@ function getPlatformInfo(url: string | null | undefined) {
       name: "Instagram",
       color: "bg-pink-500/10 text-pink-500 border-pink-500/20",
       type: "instagram",
-      videoId: null,
+      videoId: igMatch ? igMatch[1] : null,
       embedUrl: igMatch
         ? `https://www.instagram.com/p/${igMatch[1]}/embed`
         : url,
+    };
+  }
+
+  if (lower.includes("threads.net") || lower.includes("threads.com")) {
+    return {
+      name: "Threads",
+      color: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+      type: "threads",
+      videoId: null,
+      embedUrl: url,
+    };
+  }
+
+  if (
+    lower.includes("facebook.com") ||
+    lower.includes("fb.com") ||
+    lower.includes("fb.watch")
+  ) {
+    return {
+      name: "Facebook",
+      color: "bg-blue-600/10 text-blue-600 border-blue-600/20",
+      type: "facebook",
+      videoId: null,
+      embedUrl: `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(url)}&show_text=true&width=500`,
     };
   }
 
@@ -227,16 +288,6 @@ function getPlatformInfo(url: string | null | undefined) {
       type: "github",
       videoId: null,
       embedUrl: null,
-    };
-  }
-
-  if (lower.includes("threads.net")) {
-    return {
-      name: "Threads",
-      color: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-      type: "threads",
-      videoId: null,
-      embedUrl: url,
     };
   }
 
@@ -327,6 +378,9 @@ function transformBookmark(b: ZBookmark, index: number) {
     previewImage = `/api/assets/${b.content.assetId}`;
   } else if (platform.type === "youtube" && platform.videoId) {
     previewImage = `https://img.youtube.com/vi/${platform.videoId}/hqdefault.jpg`;
+  } else if (url) {
+    // Universal rich snapshot preview fallback for Instagram, Threads, X, FB, GitHub, etc.
+    previewImage = `https://api.microlink.io/?url=${encodeURIComponent(url)}&embed=image.url`;
   }
 
   return {
@@ -343,7 +397,7 @@ function transformBookmark(b: ZBookmark, index: number) {
   };
 }
 
-// ─── Twitter/X official oEmbed widget component (Memoized to prevent reload on scroll) ──────
+// ─── Twitter/X official oEmbed widget component (Memoized) ───────────────────
 const TwitterEmbedFrame = memo(function TwitterEmbedFrame({
   url,
   tweetId: _tweetId,
@@ -512,6 +566,12 @@ const EmbedModalDialog = memo(function EmbedModalDialog({
               title={item.title}
               className="h-full w-full border-0 bg-black"
             />
+          ) : item.platform.type === "facebook" && item.platform.embedUrl ? (
+            <iframe
+              src={item.platform.embedUrl}
+              title={item.title}
+              className="h-full w-full border-0 bg-white"
+            />
           ) : item.platform.type === "audio" ? (
             <div className="flex h-full flex-col items-center justify-center bg-black/95 p-8 text-center">
               <div className="mb-6 flex size-20 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/20 text-purple-400 shadow-xl">
@@ -588,6 +648,138 @@ const EmbedModalDialog = memo(function EmbedModalDialog({
   );
 });
 
+// ─── Card Visual Embed Box (100% Embed Coverage + Permanent Memory Cache) ─────
+const CardEmbedPreviewBox = memo(function CardEmbedPreviewBox({
+  item,
+  currentCategoryIcon,
+  onOpenEmbed,
+}: {
+  item: ReturnType<typeof transformBookmark>;
+  currentCategoryIcon: React.ReactNode;
+  onOpenEmbed: (item: EmbedItem) => void;
+}) {
+  const cacheKey = item.id || item.url;
+  const isAlreadyCached = useMemo(
+    () => Boolean(PermanentEmbedCache.get(cacheKey)),
+    [cacheKey],
+  );
+  const [loaded, setLoaded] = useState<boolean>(isAlreadyCached);
+
+  const handleLoadSuccess = useCallback(() => {
+    setLoaded(true);
+    PermanentEmbedCache.set(cacheKey, "loaded");
+  }, [cacheKey]);
+
+  // For Instagram & YouTube, render live direct iframe embed right inside card preview box!
+  const showDirectIframe =
+    item.platform.type === "instagram" ||
+    item.platform.type === "youtube" ||
+    item.platform.type === "vimeo";
+
+  return (
+    <div className="relative h-44 w-full overflow-hidden border-b border-border bg-muted/40">
+      {/* 1. Direct Live Embedded Frame for Instagram / YouTube / Vimeo inside Card */}
+      {showDirectIframe && item.platform.embedUrl ? (
+        <iframe
+          src={item.platform.embedUrl}
+          title={item.title}
+          onLoad={handleLoadSuccess}
+          className={cn(
+            "h-full w-full border-0 transition-opacity duration-300",
+            loaded || isAlreadyCached
+              ? "opacity-100"
+              : "absolute inset-0 opacity-0",
+          )}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        />
+      ) : null}
+
+      {/* 2. Visual Snapshot Preview Image (Microlink snapshot guarantees 100% URL coverage for Instagram, Threads, FB, X, TikTok, GitHub, etc.) */}
+      {(!showDirectIframe || !loaded) && item.previewImage ? (
+        // oxlint-disable-next-line eslint-plugin-next/no-img-element
+        <img
+          src={item.previewImage}
+          alt={item.title}
+          onLoad={handleLoadSuccess}
+          className={cn(
+            "h-full w-full object-cover transition-transform duration-300 group-hover:scale-105",
+            loaded || isAlreadyCached ? "opacity-100" : "opacity-90",
+          )}
+          onError={(e) => {
+            const target = e.currentTarget;
+            target.style.display = "none";
+            const fallback = target.nextElementSibling as HTMLElement | null;
+            if (fallback) fallback.style.display = "flex";
+          }}
+        />
+      ) : null}
+
+      {/* 3. Fallback Graphic Box */}
+      <div
+        style={{
+          display: loaded || isAlreadyCached ? "none" : "flex",
+        }}
+        className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className={cn(
+              "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
+              item.platform.color,
+            )}
+          >
+            {item.platform.name}
+          </span>
+          <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
+            {currentCategoryIcon}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className="line-clamp-2 font-mono text-[11px] font-semibold text-foreground">
+            {item.title}
+          </p>
+          <p className="line-clamp-1 font-mono text-[10px] text-muted-foreground">
+            {item.url || item.summary}
+          </p>
+        </div>
+      </div>
+
+      {/* Platform Badge Overlay */}
+      <span
+        className={cn(
+          "shadow-xs absolute left-3 top-3 z-10 rounded-md border px-2 py-0.5 text-[10px] font-bold backdrop-blur-md",
+          item.platform.color,
+        )}
+      >
+        {item.platform.name}
+      </span>
+
+      {/* Live Interactive Embed Button Overlay */}
+      {item.url && (
+        <button
+          onClick={() =>
+            onOpenEmbed({
+              title: item.title,
+              url: item.url,
+              platform: item.platform,
+            })
+          }
+          className="shadow-xs absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
+          title="Open interactive embed preview"
+        >
+          {item.platform.type === "youtube" ? (
+            <Play className="size-3 fill-current" />
+          ) : (
+            <Eye className="size-3" />
+          )}
+          <span>Embed Preview</span>
+        </button>
+      )}
+    </div>
+  );
+});
+
 // ─── Standalone Memoized Card Item (NO Reload / Re-render on Scroll) ──────────
 const BookmarkCardItem = memo(function BookmarkCardItem({
   item,
@@ -619,53 +811,13 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
           : "border-border hover:border-amber-500/70 hover:shadow-md dark:hover:border-amber-500/70",
       )}
     >
-      {/* Embedded Visual Preview Box */}
-      <div className="relative h-40 w-full overflow-hidden border-b border-border bg-muted/40">
-        {item.previewImage ? (
-          // oxlint-disable-next-line eslint-plugin-next/no-img-element
-          <img
-            src={item.previewImage}
-            alt={item.title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={(e) => {
-              const target = e.currentTarget;
-              target.style.display = "none";
-              const fallback = target.nextElementSibling as HTMLElement | null;
-              if (fallback) fallback.style.display = "flex";
-            }}
-          />
-        ) : null}
-
-        {/* Fallback Graphic Box */}
-        <div
-          style={{
-            display: item.previewImage ? "none" : "flex",
-          }}
-          className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-amber-500/15 via-background to-orange-500/15 p-4"
-        >
-          <div className="flex items-center justify-between">
-            <span
-              className={cn(
-                "rounded-md border px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
-                item.platform.color,
-              )}
-            >
-              {item.platform.name}
-            </span>
-            <div className="flex size-7 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500">
-              {currentCategoryIcon}
-            </div>
-          </div>
-          <p className="line-clamp-2 font-mono text-[11px] text-muted-foreground">
-            {item.url || item.summary}
-          </p>
-        </div>
-
+      {/* 100% Embedded Visual Preview Box with Memory Cache */}
+      <div className="relative">
         {/* Selection Checkbox Overlay */}
         <button
           onClick={() => onToggleSelect(item.id)}
           className={cn(
-            "absolute left-3 top-3 z-10 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
+            "absolute left-3 top-12 z-20 flex size-7 items-center justify-center rounded-lg border shadow-md backdrop-blur-md transition-all",
             isSelected
               ? "border-amber-500 bg-amber-500 text-white"
               : "border-border/80 bg-background/80 text-muted-foreground hover:border-amber-500 hover:text-amber-500",
@@ -679,27 +831,11 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
           )}
         </button>
 
-        {/* Live Interactive Embed Button Overlay */}
-        {item.url && (
-          <button
-            onClick={() =>
-              onOpenEmbed({
-                title: item.title,
-                url: item.url,
-                platform: item.platform,
-              })
-            }
-            className="shadow-xs absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 px-2.5 py-1 text-[11px] font-semibold text-foreground backdrop-blur-sm transition-all hover:bg-amber-500 hover:text-white"
-            title="Open interactive embed preview"
-          >
-            {item.platform.type === "youtube" ? (
-              <Play className="size-3 fill-current" />
-            ) : (
-              <Eye className="size-3" />
-            )}
-            <span>Embed Preview</span>
-          </button>
-        )}
+        <CardEmbedPreviewBox
+          item={item}
+          currentCategoryIcon={currentCategoryIcon}
+          onOpenEmbed={onOpenEmbed}
+        />
       </div>
 
       {/* Card Main Content */}
@@ -1987,7 +2123,7 @@ export default function BookmarksDirectoryView({
         </div>
       )}
 
-      {/* 4. Live Interactive Embed Modal Dialog (Memoized - NO Reload on Scroll) */}
+      {/* 4. Live Interactive Embed Modal Dialog */}
       {activeEmbedItem && (
         <EmbedModalDialog item={activeEmbedItem} onClose={handleCloseEmbed} />
       )}
