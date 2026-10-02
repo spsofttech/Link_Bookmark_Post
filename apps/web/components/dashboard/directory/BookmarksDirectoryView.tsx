@@ -567,6 +567,46 @@ function transformBookmark(b: ZBookmark, index: number) {
   };
 }
 
+// ─── Helper: Render text with auto-detected clickable links & zero-overflow wrapping ─────────
+function renderTextWithClickableLinks(text: string | null | undefined) {
+  if (!text) return null;
+
+  const urlRegex = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, i) => {
+    if (!part) return null;
+
+    if (part.match(/^(https?:\/\/|www\.)/i)) {
+      const match = part.match(/^(.*?)([.,!?:;)]*)$/);
+      const cleanUrl = match ? match[1] : part;
+      const trailingPunctuation = match ? match[2] : "";
+
+      const href = cleanUrl.toLowerCase().startsWith("www.")
+        ? `https://${cleanUrl}`
+        : cleanUrl;
+
+      return (
+        <span key={i} className="inline min-w-0 max-w-full">
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex min-w-0 max-w-full items-center gap-1 break-words break-all font-mono text-amber-600 underline underline-offset-2 transition-colors [overflow-wrap:anywhere] hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+          >
+            <span>{cleanUrl}</span>
+            <ExternalLink className="inline size-3 shrink-0" />
+          </a>
+          {trailingPunctuation}
+        </span>
+      );
+    }
+
+    return <span key={i}>{part}</span>;
+  });
+}
+
 // ─── Post Detail Slider Drawer (NO Embed IFrames, Pure Post Details + Copy & HTML Editor) ─────────────
 /* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
 const PostDetailSlider = memo(function PostDetailSlider({
@@ -648,7 +688,7 @@ const PostDetailSlider = memo(function PostDetailSlider({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-2xl duration-300 animate-in slide-in-from-right"
+        className="relative flex h-full w-full min-w-0 max-w-xl flex-col border-l border-border bg-card shadow-2xl duration-300 animate-in slide-in-from-right"
       >
         {/* Slider Header */}
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-6">
@@ -741,7 +781,7 @@ const PostDetailSlider = memo(function PostDetailSlider({
         </div>
 
         {/* Slider Content Body: Post Details */}
-        <div className="flex-1 space-y-6 overflow-y-auto p-6">
+        <div className="min-w-0 max-w-full flex-1 space-y-6 overflow-y-auto p-6">
           {/* Cover Preview Image */}
           {item.previewImage && (
             <div className="relative overflow-hidden rounded-2xl border border-border bg-muted/30">
@@ -758,9 +798,9 @@ const PostDetailSlider = memo(function PostDetailSlider({
           )}
 
           {/* Title + Copy Button */}
-          <div className="space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground">
+          <div className="min-w-0 max-w-full space-y-2">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <h2 className="min-w-0 break-words break-all text-xl font-bold leading-snug tracking-tight text-foreground [overflow-wrap:anywhere]">
                 {item.title}
               </h2>
               <CopyButton
@@ -770,14 +810,14 @@ const PostDetailSlider = memo(function PostDetailSlider({
               />
             </div>
             {item.url && (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
                 <a
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden font-mono text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
                 >
-                  <span className="max-w-md truncate">{item.url}</span>
+                  <span className="min-w-0 truncate">{item.url}</span>
                   <ExternalLink className="size-3 shrink-0" />
                 </a>
                 <CopyButton text={item.url} label="URL" className="shrink-0" />
@@ -786,20 +826,20 @@ const PostDetailSlider = memo(function PostDetailSlider({
           </div>
 
           {/* Post Details & Description + Copy Button */}
-          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-5">
+          <div className="min-w-0 max-w-full space-y-2 overflow-hidden rounded-2xl border border-border bg-muted/20 p-5">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Post Details & Description
               </h3>
               <CopyButton text={item.summary} label="Description" />
             </div>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-              {item.summary}
+            <p className="min-w-0 max-w-full whitespace-pre-wrap break-words break-all text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
+              {renderTextWithClickableLinks(item.summary)}
             </p>
           </div>
 
           {/* Interactive HTML & Additional Description Editor */}
-          <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex size-6 items-center justify-center rounded-md bg-amber-500/15 text-amber-500">
@@ -912,15 +952,15 @@ const PostDetailSlider = memo(function PostDetailSlider({
             ) : (
               <div>
                 {noteContent ? (
-                  <div className="space-y-2">
+                  <div className="min-w-0 max-w-full space-y-2">
                     {/<[a-z][\s\S]*>/i.test(noteContent) ? (
                       <div
-                        className="prose prose-sm max-w-none border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground dark:prose-invert"
+                        className="prose prose-sm min-w-0 max-w-full max-w-none overflow-hidden break-words break-all border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground [overflow-wrap:anywhere] dark:prose-invert"
                         dangerouslySetInnerHTML={{ __html: noteContent }}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground">
-                        {noteContent}
+                      <p className="min-w-0 max-w-full whitespace-pre-wrap break-words break-all border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                        {renderTextWithClickableLinks(noteContent)}
                       </p>
                     )}
                   </div>
@@ -1218,8 +1258,8 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
         </div>
 
         {/* Card Description */}
-        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-          {item.summary}
+        <p className="line-clamp-2 break-words break-all text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+          {renderTextWithClickableLinks(item.summary)}
         </p>
       </div>
 
