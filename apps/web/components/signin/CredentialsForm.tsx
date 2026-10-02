@@ -35,8 +35,12 @@ const VERIFY_EMAIL_ERROR = "Please verify your email address before signing in";
 
 export default function CredentialsForm({
   onSuccess,
+  isModal = false,
+  onSwitchTab,
 }: {
   onSuccess?: () => void;
+  isModal?: boolean;
+  onSwitchTab?: (tab: "signin" | "signup") => void;
 } = {}) {
   const [signinError, setSigninError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -82,9 +86,9 @@ export default function CredentialsForm({
   const isPending = isLoading || form.formState.isSubmitting || isRedirecting;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Full-screen redirect loader — shown after successful login */}
-      {isRedirecting && (
+      {isRedirecting && !isModal && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background/95 backdrop-blur-sm">
           <KarakeepLogo height={64} />
           <div className="flex items-center gap-3">
@@ -122,7 +126,6 @@ export default function CredentialsForm({
                 }
                 return;
               }
-              // Show branded loading overlay and navigate with fresh session cookies
               setIsRedirecting(true);
               if (onSuccess) {
                 onSuccess();
@@ -150,7 +153,7 @@ export default function CredentialsForm({
             name="email"
             render={({ field }) => (
               <FormItem className="space-y-1.5">
-                <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Email Address
                 </FormLabel>
                 <FormControl>
@@ -159,11 +162,11 @@ export default function CredentialsForm({
                     autoComplete="email"
                     spellCheck={false}
                     placeholder="name@example.com"
-                    className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
+                    className="h-11 rounded-xl border border-border bg-muted/40 px-4 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                     {...field}
                   />
                 </FormControl>
-                <FormMessage className="text-xs text-rose-400" />
+                <FormMessage className="text-xs text-rose-500" />
               </FormItem>
             )}
           />
@@ -174,12 +177,12 @@ export default function CredentialsForm({
             render={({ field }) => (
               <FormItem className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Password
                   </FormLabel>
                   <Link
                     href="/forgot-password"
-                    className="text-xs text-amber-400 transition-colors hover:text-amber-300 hover:underline"
+                    className="text-xs font-medium text-amber-600 transition-colors hover:underline dark:text-amber-400"
                   >
                     Forgot password?
                   </Link>
@@ -190,13 +193,13 @@ export default function CredentialsForm({
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="••••••••"
-                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
+                      className="h-11 rounded-xl border border-border bg-muted/40 pl-4 pr-10 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                       {...field}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                       tabIndex={-1}
                       aria-label={
                         showPassword ? "Hide password" : "Show password"
@@ -210,7 +213,7 @@ export default function CredentialsForm({
                     </button>
                   </div>
                 </FormControl>
-                <FormMessage className="text-xs text-rose-400" />
+                <FormMessage className="text-xs text-rose-500" />
               </FormItem>
             )}
           />
@@ -234,15 +237,25 @@ export default function CredentialsForm({
         </form>
       </Form>
 
-      <div className="pt-2 text-center">
-        <p className="text-sm text-slate-400">
+      <div className="pt-1 text-center">
+        <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link
-            href="/signup"
-            className="font-semibold text-amber-400 transition-colors hover:text-amber-300 hover:underline"
-          >
-            Sign up
-          </Link>
+          {onSwitchTab ? (
+            <button
+              type="button"
+              onClick={() => onSwitchTab("signup")}
+              className="font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+            >
+              Sign up
+            </button>
+          ) : (
+            <Link
+              href="/signup"
+              className="font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+            >
+              Sign up
+            </Link>
+          )}
         </p>
       </div>
     </div>

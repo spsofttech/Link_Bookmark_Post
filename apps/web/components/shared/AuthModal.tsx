@@ -10,9 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import CredentialsForm from "@/components/signin/CredentialsForm";
 import SignUpForm from "@/components/signup/SignUpForm";
-import KarakeepLogo from "@/components/KarakeepIcon";
-import { toast } from "sonner";
-import { Lock } from "lucide-react";
+import { Sparkles, Lock } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -35,44 +33,43 @@ export function AuthModal({
     } catch {
       // Ignore localStorage errors
     }
-    toast.success("Successfully logged in! Reloading workspace...");
     onClose();
     setTimeout(() => {
       window.location.reload();
-    }, 500);
+    }, 300);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md overflow-hidden rounded-2xl p-6 sm:p-8">
+      <DialogContent className="max-w-md overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
         <DialogHeader className="flex flex-col items-center justify-center space-y-2 text-center">
-          <KarakeepLogo height={52} />
-          <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-            {tab === "signin"
-              ? "Sign in to Save Content"
-              : "Create your Account"}
+          <div className="flex size-12 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-500 shadow-inner">
+            <Sparkles className="size-6" />
+          </div>
+          <DialogTitle className="text-xl font-extrabold tracking-tight text-foreground">
+            {tab === "signin" ? "Sign in to Continue" : "Create Your Account"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             {message ||
-              "Unlock unlimited post previews, bookmark saving, and AI auto-tagging."}
+              "Unlock unlimited post previews, bookmark saving, and AI template organizing."}
           </DialogDescription>
         </DialogHeader>
 
         {message && (
-          <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs font-semibold text-amber-600 dark:text-amber-400">
-            <Lock className="size-4 shrink-0" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <Lock className="size-4 shrink-0 text-amber-500" />
             <span>{message}</span>
           </div>
         )}
 
         {/* Tab switcher */}
-        <div className="flex rounded-xl bg-muted p-1 text-xs font-semibold">
+        <div className="flex rounded-xl bg-muted/60 p-1 text-xs font-semibold">
           <button
             type="button"
             onClick={() => setTab("signin")}
-            className={`flex-1 rounded-lg py-2 transition-all ${
+            className={`flex-1 rounded-lg py-2 transition-all duration-200 ${
               tab === "signin"
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background font-bold text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -81,9 +78,9 @@ export function AuthModal({
           <button
             type="button"
             onClick={() => setTab("signup")}
-            className={`flex-1 rounded-lg py-2 transition-all ${
+            className={`flex-1 rounded-lg py-2 transition-all duration-200 ${
               tab === "signup"
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background font-bold text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -94,9 +91,17 @@ export function AuthModal({
         {/* Form Container */}
         <div className="mt-2">
           {tab === "signin" ? (
-            <CredentialsForm onSuccess={handleAuthSuccess} />
+            <CredentialsForm
+              isModal
+              onSuccess={handleAuthSuccess}
+              onSwitchTab={(t) => setTab(t)}
+            />
           ) : (
-            <SignUpForm redirectUrl="/dashboard/bookmarks" />
+            <SignUpForm
+              isModal
+              redirectUrl="/dashboard/bookmarks"
+              onSwitchTab={(t) => setTab(t)}
+            />
           )}
         </div>
       </DialogContent>

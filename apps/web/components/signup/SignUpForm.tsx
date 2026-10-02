@@ -41,9 +41,15 @@ const VERIFY_EMAIL_ERROR = "Please verify your email address before signing in";
 
 interface SignUpFormProps {
   redirectUrl: string;
+  isModal?: boolean;
+  onSwitchTab?: (tab: "signin" | "signup") => void;
 }
 
-export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
+export default function SignUpForm({
+  redirectUrl,
+  isModal = false,
+  onSwitchTab,
+}: SignUpFormProps) {
   const api = useTRPC();
   const form = useForm<z.infer<typeof zSignUpSchema>>({
     resolver: zodResolver(zSignUpSchema),
@@ -97,298 +103,321 @@ export default function SignUpForm({ redirectUrl }: SignUpFormProps) {
     );
   }
 
-  return (
-    <Card className="w-full overflow-hidden rounded-2xl border-amber-500/20 bg-slate-900/80 shadow-2xl shadow-amber-500/10 backdrop-blur-xl">
-      <CardHeader className="pb-4 pt-8 text-center">
-        <div className="mx-auto mb-3 flex items-center justify-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
-          <Sparkles className="size-3.5" />
-          <span>Join Save Content Platform</span>
+  const formContent = (
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(async (value) => {
+          if (turnstileSiteKey && !value.turnstileToken) {
+            form.setError("turnstileToken", {
+              type: "manual",
+              message: "Please complete the verification challenge",
+            });
+            return;
+          }
+          form.clearErrors("turnstileToken");
+          try {
+            await createUserMutation.mutateAsync({
+              ...value,
+              redirectUrl,
+            });
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            const msg =
+              err?.message ||
+              (e instanceof TRPCClientError
+                ? e.message
+                : "Failed to create account. Please try again.");
+            setErrorMessage(msg);
+            if (turnstileSiteKey) {
+              turnstileRef.current?.reset();
+              form.setValue("turnstileToken", "");
+            }
+            return;
+          }
+          const resp = await signIn("credentials", {
+            redirect: false,
+            email: value.email.trim(),
+            password: value.password,
+          });
+          if (!resp || !resp.ok || resp.error) {
+            if (resp?.error === VERIFY_EMAIL_ERROR) {
+              router.replace(
+                `/check-email?email=${encodeURIComponent(value.email.trim())}&redirectUrl=${encodeURIComponent(redirectUrl)}`,
+              );
+            } else {
+              setErrorMessage(
+                resp?.error ?? "Hit an unexpected error while signing in",
+              );
+            }
+            if (turnstileSiteKey) {
+              turnstileRef.current?.reset();
+              form.setValue("turnstileToken", "");
+            }
+            return;
+          }
+          if (isMobileAppRedirect(redirectUrl)) {
+            window.location.href = redirectUrl;
+          } else {
+            window.location.href = redirectUrl || "/dashboard/bookmarks";
+          }
+        })}
+        className="space-y-4"
+      >
+        {errorMessage && (
+          <Alert
+            variant="destructive"
+            className="border-rose-500/30 bg-rose-500/10 text-rose-300"
+          >
+            <AlertCircle className="h-4 w-4 text-rose-400" />
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        )}
+
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Full Name
+              </FormLabel>
+              <FormControl>
+                <Input
+                  type="text"
+                  placeholder="Alex Morgan"
+                  className="h-11 rounded-xl border border-border bg-muted/40 px-4 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage className="text-xs text-rose-500" />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Email Address
+              </FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="name@example.com"
+                  className="h-11 rounded-xl border border-border bg-muted/40 px-4 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage className="text-xs text-rose-500" />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Password
+              </FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="h-11 rounded-xl border border-border bg-muted/40 pl-4 pr-10 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    tabIndex={-1}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </FormControl>
+              <FormMessage className="text-xs text-rose-500" />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Confirm Password
+              </FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="h-11 rounded-xl border border-border bg-muted/40 pl-4 pr-10 text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    tabIndex={-1}
+                    aria-label={
+                      showConfirmPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </FormControl>
+              <FormMessage className="text-xs text-rose-500" />
+            </FormItem>
+          )}
+        />
+
+        {turnstileSiteKey && (
+          <FormField
+            control={form.control}
+            name="turnstileToken"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Verification
+                </FormLabel>
+                <FormControl>
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={turnstileSiteKey}
+                    onSuccess={(token) => {
+                      field.onChange(token);
+                      form.clearErrors("turnstileToken");
+                    }}
+                    onExpire={() => field.onChange("")}
+                    onError={() => {
+                      field.onChange("");
+                      form.setError("turnstileToken", {
+                        type: "manual",
+                        message:
+                          "Verification failed, please reload the challenge",
+                      });
+                    }}
+                  />
+                </FormControl>
+                <FormMessage className="text-xs text-rose-500" />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <ActionButton
+          type="submit"
+          loading={form.formState.isSubmitting || createUserMutation.isPending}
+          className="h-11 w-full rounded-xl border-0 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-bold text-slate-950 shadow-lg shadow-amber-500/25 transition-all duration-200 hover:scale-[1.01] hover:from-amber-400 hover:to-amber-300 active:scale-[0.99]"
+        >
+          Sign up
+        </ActionButton>
+
+        {(clientConfig.legal.termsOfServiceUrl ||
+          clientConfig.legal.privacyPolicyUrl) && (
+          <p className="text-center text-xs text-muted-foreground">
+            By clicking on &apos;Sign up&apos; above, you are agreeing to the{" "}
+            {clientConfig.legal.termsOfServiceUrl && (
+              <Link
+                href={clientConfig.legal.termsOfServiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-600 underline hover:text-amber-500 dark:text-amber-400"
+              >
+                Terms of Service
+              </Link>
+            )}
+            {clientConfig.legal.termsOfServiceUrl &&
+              clientConfig.legal.privacyPolicyUrl &&
+              " and "}
+            {clientConfig.legal.privacyPolicyUrl && (
+              <Link
+                href={clientConfig.legal.privacyPolicyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-600 underline hover:text-amber-500 dark:text-amber-400"
+              >
+                Privacy Policy
+              </Link>
+            )}
+            .
+          </p>
+        )}
+      </form>
+    </Form>
+  );
+
+  if (isModal) {
+    return (
+      <div className="space-y-5">
+        {formContent}
+        <div className="pt-1 text-center">
+          <p className="text-sm text-muted-foreground">
+            Already have an account?{" "}
+            {onSwitchTab ? (
+              <button
+                type="button"
+                onClick={() => onSwitchTab("signin")}
+                className="font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+              >
+                Sign in
+              </button>
+            ) : (
+              <Link
+                href="/signin"
+                className="font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+              >
+                Sign in
+              </Link>
+            )}
+          </p>
         </div>
-        <CardTitle className="text-3xl font-extrabold tracking-tight text-white">
+      </div>
+    );
+  }
+
+  return (
+    <Card className="w-full overflow-hidden rounded-3xl border-border bg-card shadow-2xl backdrop-blur-xl">
+      <CardHeader className="pb-4 pt-8 text-center">
+        <div className="mx-auto mb-3 flex items-center justify-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-500">
+          <Sparkles className="size-3.5" />
+          <span>Save Content Platform</span>
+        </div>
+        <CardTitle className="text-3xl font-extrabold tracking-tight text-foreground">
           Create Your Account
         </CardTitle>
-        <CardDescription className="mt-1 text-sm text-slate-400">
+        <CardDescription className="mt-1 text-sm text-muted-foreground">
           Join Save Content to start organizing your AI templates & bookmarks
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 px-6 pb-8">
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(async (value) => {
-              if (turnstileSiteKey && !value.turnstileToken) {
-                form.setError("turnstileToken", {
-                  type: "manual",
-                  message: "Please complete the verification challenge",
-                });
-                return;
-              }
-              form.clearErrors("turnstileToken");
-              try {
-                await createUserMutation.mutateAsync({
-                  ...value,
-                  redirectUrl,
-                });
-              } catch (e: unknown) {
-                const err = e as { message?: string };
-                const msg =
-                  err?.message ||
-                  (e instanceof TRPCClientError
-                    ? e.message
-                    : "Failed to create account. Please try again.");
-                setErrorMessage(msg);
-                // Reset turnstile widget on error to get a new token
-                if (turnstileSiteKey) {
-                  turnstileRef.current?.reset();
-                  form.setValue("turnstileToken", "");
-                }
-                return;
-              }
-              const resp = await signIn("credentials", {
-                redirect: false,
-                email: value.email.trim(),
-                password: value.password,
-              });
-              if (!resp || !resp.ok || resp.error) {
-                if (resp?.error === VERIFY_EMAIL_ERROR) {
-                  router.replace(
-                    `/check-email?email=${encodeURIComponent(value.email.trim())}&redirectUrl=${encodeURIComponent(redirectUrl)}`,
-                  );
-                } else {
-                  setErrorMessage(
-                    resp?.error ?? "Hit an unexpected error while signing in",
-                  );
-                }
-                // Reset turnstile widget on error to get a new token
-                if (turnstileSiteKey) {
-                  turnstileRef.current?.reset();
-                  form.setValue("turnstileToken", "");
-                }
-                return;
-              }
-              if (isMobileAppRedirect(redirectUrl)) {
-                window.location.href = redirectUrl;
-              } else {
-                window.location.href = redirectUrl || "/dashboard/bookmarks";
-              }
-            })}
-            className="space-y-4"
-          >
-            {errorMessage && (
-              <Alert
-                variant="destructive"
-                className="border-rose-500/30 bg-rose-500/10 text-rose-300"
-              >
-                <AlertCircle className="h-4 w-4 text-rose-400" />
-                <AlertDescription>{errorMessage}</AlertDescription>
-              </Alert>
-            )}
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Full Name
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="text"
-                      placeholder="Alex Morgan"
-                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-xs text-rose-400" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Email Address
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="name@example.com"
-                      className="h-11 rounded-xl border-slate-800 bg-slate-950/80 px-4 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-xs text-rose-400" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Password
-                  </FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-                        {...field}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
-                        tabIndex={-1}
-                        aria-label={
-                          showPassword ? "Hide password" : "Show password"
-                        }
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage className="text-xs text-rose-400" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Confirm Password
-                  </FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="h-11 rounded-xl border-slate-800 bg-slate-950/80 pl-4 pr-10 text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:ring-amber-500/20"
-                        {...field}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
-                        }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
-                        tabIndex={-1}
-                        aria-label={
-                          showConfirmPassword
-                            ? "Hide password"
-                            : "Show password"
-                        }
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage className="text-xs text-rose-400" />
-                </FormItem>
-              )}
-            />
-
-            {turnstileSiteKey && (
-              <FormField
-                control={form.control}
-                name="turnstileToken"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                      Verification
-                    </FormLabel>
-                    <FormControl>
-                      <Turnstile
-                        ref={turnstileRef}
-                        siteKey={turnstileSiteKey}
-                        onSuccess={(token) => {
-                          field.onChange(token);
-                          form.clearErrors("turnstileToken");
-                        }}
-                        onExpire={() => field.onChange("")}
-                        onError={() => {
-                          field.onChange("");
-                          form.setError("turnstileToken", {
-                            type: "manual",
-                            message:
-                              "Verification failed, please reload the challenge",
-                          });
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage className="text-xs text-rose-400" />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            <ActionButton
-              type="submit"
-              loading={
-                form.formState.isSubmitting || createUserMutation.isPending
-              }
-              className="h-11 w-full rounded-xl border-0 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 font-bold text-slate-950 shadow-lg shadow-amber-500/25 transition-all duration-200 hover:scale-[1.01] hover:from-amber-400 hover:to-amber-300 active:scale-[0.99]"
-            >
-              Sign up
-            </ActionButton>
-
-            {(clientConfig.legal.termsOfServiceUrl ||
-              clientConfig.legal.privacyPolicyUrl) && (
-              <p className="text-center text-xs text-slate-400">
-                By clicking on &apos;Sign up&apos; above, you are agreeing to
-                the{" "}
-                {clientConfig.legal.termsOfServiceUrl && (
-                  <Link
-                    href={clientConfig.legal.termsOfServiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-amber-400 underline hover:text-amber-300"
-                  >
-                    Terms of Service
-                  </Link>
-                )}
-                {clientConfig.legal.termsOfServiceUrl &&
-                  clientConfig.legal.privacyPolicyUrl &&
-                  " and "}
-                {clientConfig.legal.privacyPolicyUrl && (
-                  <Link
-                    href={clientConfig.legal.privacyPolicyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-amber-400 underline hover:text-amber-300"
-                  >
-                    Privacy Policy
-                  </Link>
-                )}
-                .
-              </p>
-            )}
-          </form>
-        </Form>
-
+        {formContent}
         <div className="pt-2 text-center">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link
               href="/signin"
-              className="font-semibold text-amber-400 transition-colors hover:text-amber-300 hover:underline"
+              className="font-semibold text-amber-600 transition-colors hover:underline dark:text-amber-400"
             >
               Sign in
             </Link>
