@@ -10,7 +10,6 @@ import {
   Code,
   FileText,
   MessageSquare,
-  Wrench,
   Search,
   Grid,
   List as ListIcon,
@@ -23,9 +22,6 @@ import {
   Github,
   ChevronLeft,
   ChevronRight,
-  Settings,
-  Webhook,
-  Cpu,
   Boxes,
   Sparkles,
   Sun,
@@ -41,6 +37,11 @@ import {
   Check,
   Tag,
   RefreshCw,
+  Copy,
+  Pencil,
+  Save,
+  FileCode,
+  FolderPlus,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ import { useTRPC } from "@karakeep/shared-react/trpc";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useDeleteBookmark,
+  useUpdateBookmark,
   useUpdateBookmarkTags,
 } from "@karakeep/shared-react/hooks/bookmarks";
 import { toast } from "sonner";
@@ -109,6 +111,13 @@ class PermanentEmbedCache {
 // ─── Page size for client-side display chunking ──────────────────────────────
 const PAGE_SIZE = 24;
 
+export interface CustomCategory {
+  id: string;
+  name: string;
+  tag: string;
+  description?: string;
+}
+
 interface CategoryDef {
   id: string;
   name: string;
@@ -119,7 +128,14 @@ interface CategoryDef {
   tags: string[];
 }
 
-const CATEGORY_OPTIONS = [
+export interface CategoryOption {
+  id: string;
+  name: string;
+  tag: string;
+  icon: React.ReactNode;
+}
+
+const DEFAULT_CATEGORY_OPTIONS: CategoryOption[] = [
   {
     id: "skills",
     name: "Skills",
@@ -169,6 +185,159 @@ const CATEGORY_OPTIONS = [
     icon: <MessageSquare className="size-3.5 text-sky-500" />,
   },
 ];
+
+// ─── Reusable Copy Button ───────────────────────────────────────────────────
+function CopyButton({
+  text,
+  label = "Copy",
+  className,
+}: {
+  text: string;
+  label?: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast.success(`${label} copied to clipboard`);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400",
+        copied &&
+          "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+        className,
+      )}
+      title={`Copy ${label}`}
+    >
+      {copied ? (
+        <>
+          <Check className="size-3.5 text-emerald-500" />
+          <span>Copied!</span>
+        </>
+      ) : (
+        <>
+          <Copy className="size-3.5" />
+          <span>{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+// ─── Create Category Dialog Modal ──────────────────────────────────────────
+/* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
+function CreateCategoryModal({
+  isOpen,
+  onClose,
+  onCreateCategory,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateCategory: (name: string, description: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onCreateCategory(name.trim(), description.trim());
+    setName("");
+    setDescription("");
+    onClose();
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95"
+      >
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+              <FolderPlus className="size-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold tracking-tight text-foreground">
+                Create New Category
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Add a custom category to organize your posts and templates
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">
+              Category Name *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. AI Prompts, UI Design, Work Projects"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">
+              Description (Optional)
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Brief description of bookmarks in this category..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600 active:scale-95"
+            >
+              <Plus className="size-3.5" />
+              <span>Create Category</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function getPlatformInfo(url: string | null | undefined) {
   if (!url) {
@@ -398,13 +567,16 @@ function transformBookmark(b: ZBookmark, index: number) {
   };
 }
 
-// ─── Post Detail Slider Drawer (NO Embed IFrames, Pure Post Details) ─────────────
+// ─── Post Detail Slider Drawer (NO Embed IFrames, Pure Post Details + Copy & HTML Editor) ─────────────
 /* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
 const PostDetailSlider = memo(function PostDetailSlider({
   item,
   onClose,
   onSingleCategoryChange,
   onSingleDelete,
+  categoryOptions,
+  onOpenCreateCategoryModal,
+  onRefreshWorkspace,
 }: {
   item: ReturnType<typeof transformBookmark>;
   onClose: () => void;
@@ -414,7 +586,22 @@ const PostDetailSlider = memo(function PostDetailSlider({
     name: string,
   ) => void;
   onSingleDelete?: (id: string, title: string) => void;
+  categoryOptions: CategoryOption[];
+  onOpenCreateCategoryModal?: () => void;
+  onRefreshWorkspace?: () => Promise<void>;
 }) {
+  const updateBookmarkMutation = useUpdateBookmark();
+  const [noteContent, setNoteContent] = useState<string>(
+    item.bookmark?.note || "",
+  );
+  const [isEditingNote, setIsEditingNote] = useState<boolean>(false);
+  const [htmlMode, setHtmlMode] = useState<boolean>(false);
+  const [isSavingNote, setIsSavingNote] = useState<boolean>(false);
+
+  useEffect(() => {
+    setNoteContent(item.bookmark?.note || "");
+  }, [item.bookmark?.note]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -424,6 +611,27 @@ const PostDetailSlider = memo(function PostDetailSlider({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  const handleSaveNote = async () => {
+    if (!item.bookmark?.id) return;
+    setIsSavingNote(true);
+    try {
+      await updateBookmarkMutation.mutateAsync({
+        bookmarkId: item.bookmark.id,
+        note: noteContent,
+      });
+      if (onRefreshWorkspace) {
+        await onRefreshWorkspace();
+      }
+      toast.success("Additional description & HTML note saved successfully!");
+      setIsEditingNote(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save note";
+      toast.error(msg);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
 
   const createdDate = item.bookmark?.createdAt
     ? new Date(item.bookmark.createdAt).toLocaleDateString("en-US", {
@@ -462,12 +670,12 @@ const PostDetailSlider = memo(function PostDetailSlider({
                     <ChevronDown className="size-3 opacity-60" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="z-50 w-48">
+                <DropdownMenuContent align="start" className="z-50 w-52">
                   <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Change Category
                   </div>
                   <DropdownMenuSeparator />
-                  {CATEGORY_OPTIONS.map((opt) => (
+                  {categoryOptions.map((opt) => (
                     <DropdownMenuItem
                       key={opt.id}
                       onClick={() =>
@@ -489,6 +697,18 @@ const PostDetailSlider = memo(function PostDetailSlider({
                       )}
                     </DropdownMenuItem>
                   ))}
+                  {onOpenCreateCategoryModal && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onOpenCreateCategoryModal()}
+                        className="flex cursor-pointer items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400"
+                      >
+                        <Plus className="size-3.5 text-amber-500" />
+                        <span>+ Create Category</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -537,45 +757,182 @@ const PostDetailSlider = memo(function PostDetailSlider({
             </div>
           )}
 
-          {/* Title */}
+          {/* Title + Copy Button */}
           <div className="space-y-2">
-            <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground">
-              {item.title}
-            </h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-xl font-bold leading-snug tracking-tight text-foreground">
+                {item.title}
+              </h2>
+              <CopyButton
+                text={item.title}
+                label="Title"
+                className="shrink-0"
+              />
+            </div>
             {item.url && (
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
-              >
-                <span className="max-w-md truncate">{item.url}</span>
-                <ExternalLink className="size-3 shrink-0" />
-              </a>
+              <div className="flex items-center gap-2">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400"
+                >
+                  <span className="max-w-md truncate">{item.url}</span>
+                  <ExternalLink className="size-3 shrink-0" />
+                </a>
+                <CopyButton text={item.url} label="URL" className="shrink-0" />
+              </div>
             )}
           </div>
 
-          {/* Post Summary & Body Content */}
+          {/* Post Details & Description + Copy Button */}
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Post Details & Description
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Post Details & Description
+              </h3>
+              <CopyButton text={item.summary} label="Description" />
+            </div>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
               {item.summary}
             </p>
           </div>
 
-          {/* Additional Note */}
-          {item.bookmark?.note && item.bookmark.note !== item.summary && (
-            <div className="space-y-2 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                Personal Note
-              </h3>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                {item.bookmark.note}
-              </p>
+          {/* Interactive HTML & Additional Description Editor */}
+          <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex size-6 items-center justify-center rounded-md bg-amber-500/15 text-amber-500">
+                  <FileCode className="size-3.5" />
+                </div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Additional Description & HTML Notes
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {noteContent && (
+                  <CopyButton text={noteContent} label="HTML Note" />
+                )}
+                <button
+                  onClick={() => setIsEditingNote(!isEditingNote)}
+                  className="flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
+                >
+                  <Pencil className="size-3" />
+                  <span>
+                    {isEditingNote
+                      ? "Cancel"
+                      : noteContent
+                        ? "Edit Note"
+                        : "+ Add HTML Note"}
+                  </span>
+                </button>
+              </div>
             </div>
-          )}
+
+            {isEditingNote ? (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between border-b border-amber-500/20 pb-2 text-xs">
+                  <span className="text-[11px] text-muted-foreground">
+                    Add custom description or raw HTML markup (e.g.
+                    &lt;b&gt;Note:&lt;/b&gt;)
+                  </span>
+                  <div className="flex items-center gap-1 rounded-md border border-border bg-muted/60 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setHtmlMode(false)}
+                      className={cn(
+                        "rounded-xs px-2 py-0.5 text-[10px] font-semibold transition-colors",
+                        !htmlMode
+                          ? "shadow-xs bg-background text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      Visual Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHtmlMode(true)}
+                      className={cn(
+                        "rounded-xs px-2 py-0.5 text-[10px] font-semibold transition-colors",
+                        htmlMode
+                          ? "shadow-xs bg-amber-500 text-white"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      &lt;/&gt; HTML Code
+                    </button>
+                  </div>
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="Enter HTML or plain text notes (e.g. <h3>Notes</h3><p>Custom description here...</p>)"
+                  className={cn(
+                    "w-full rounded-xl border border-amber-500/30 bg-background p-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500",
+                    htmlMode &&
+                      "border-slate-800 bg-slate-950 font-mono text-[11px] text-emerald-400",
+                  )}
+                />
+
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">
+                    {/<[a-z][\s\S]*>/i.test(noteContent)
+                      ? "✨ HTML Tags Detected"
+                      : "📝 Plain Text Note"}
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNoteContent(item.bookmark?.note || "");
+                        setIsEditingNote(false);
+                      }}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingNote}
+                      onClick={handleSaveNote}
+                      className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white shadow-md transition-all hover:bg-amber-600 active:scale-95 disabled:opacity-50"
+                    >
+                      {isSavingNote ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Save className="size-3.5" />
+                      )}
+                      <span>Save Note</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {noteContent ? (
+                  <div className="space-y-2">
+                    {/<[a-z][\s\S]*>/i.test(noteContent) ? (
+                      <div
+                        className="prose prose-sm max-w-none border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground dark:prose-invert"
+                        dangerouslySetInnerHTML={{ __html: noteContent }}
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap border-l-2 border-amber-500 py-1 pl-3 text-xs leading-relaxed text-foreground">
+                        {noteContent}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-muted-foreground">
+                    No additional description added yet. Click &quot;+ Add HTML
+                    Note&quot; to include custom HTML or extra descriptions.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Tags */}
           {item.bookmark?.tags && item.bookmark.tags.length > 0 && (
@@ -742,6 +1099,8 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
   onOpenEmbed,
   onSingleDelete,
   onSingleCategoryChange,
+  categoryOptions,
+  onOpenCreateCategoryModal,
 }: {
   item: ReturnType<typeof transformBookmark>;
   isSelected: boolean;
@@ -754,6 +1113,8 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
     tag: string,
     name: string,
   ) => void;
+  categoryOptions: CategoryOption[];
+  onOpenCreateCategoryModal?: () => void;
 }) {
   return (
     <div
@@ -877,12 +1238,12 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
                   <ChevronDown className="size-2.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="z-50 w-48">
+              <DropdownMenuContent align="start" className="z-50 w-52">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Change Category
                 </div>
                 <DropdownMenuSeparator />
-                {CATEGORY_OPTIONS.map((opt) => (
+                {categoryOptions.map((opt) => (
                   <DropdownMenuItem
                     key={opt.id}
                     onClick={() =>
@@ -900,6 +1261,18 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
                     )}
                   </DropdownMenuItem>
                 ))}
+                {onOpenCreateCategoryModal && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onOpenCreateCategoryModal()}
+                      className="flex cursor-pointer items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400"
+                    >
+                      <Plus className="size-3.5 text-amber-500" />
+                      <span>+ Create Category</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
@@ -955,14 +1328,70 @@ export default function BookmarksDirectoryView({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  // DEFAULT SORT BY NEWEST (Requirement #5)
+  // DEFAULT SORT BY NEWEST
   const [sortBy, setSortBy] = useState<
     "popular" | "newest" | "oldest" | "alphabetical"
   >("newest");
 
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
 
-  // Multi-Selection State (Requirement #2)
+  // Custom Categories State (persisted in localStorage)
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
+    () => {
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("karakeep_custom_categories_v1");
+          if (stored) return JSON.parse(stored);
+        } catch {
+          // ignore storage errors
+        }
+      }
+      return [];
+    },
+  );
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] =
+    useState<boolean>(false);
+
+  const handleCreateCategory = useCallback(
+    (name: string, description: string) => {
+      const tag = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      const id = tag || `custom-${Date.now()}`;
+      const newCat: CustomCategory = {
+        id,
+        name,
+        tag,
+        description: description || `Custom category for ${name}`,
+      };
+
+      setCustomCategories((prev) => {
+        if (prev.some((c) => c.id === id)) {
+          toast.info(`Category "${name}" already exists`);
+          return prev;
+        }
+        const updated = [...prev, newCat];
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              "karakeep_custom_categories_v1",
+              JSON.stringify(updated),
+            );
+          } catch {
+            // ignore storage errors
+          }
+        }
+        toast.success(`Category "${name}" created successfully!`);
+        return updated;
+      });
+
+      setActiveCategory(id);
+    },
+    [],
+  );
+
+  // Multi-Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkProcessing, setIsBulkProcessing] = useState<boolean>(false);
 
@@ -975,7 +1404,7 @@ export default function BookmarksDirectoryView({
     undefined,
   );
 
-  // Active Embed Preview Modal State (Requirement #4 - Memoized to NOT reload on scroll)
+  // Active Embed Preview Modal State
   const [activeEmbedItem, setActiveEmbedItem] = useState<ReturnType<
     typeof transformBookmark
   > | null>(null);
@@ -1021,7 +1450,7 @@ export default function BookmarksDirectoryView({
   const deleteBookmarkMutation = useDeleteBookmark();
   const updateTagsMutation = useUpdateBookmarkTags();
 
-  // Helper for immediate UI update & toast notification after CRUD (Requirement #1)
+  // Helper for immediate UI update & toast notification after CRUD
   const refreshWorkspace = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries(api.bookmarks.getBookmarks.pathFilter()),
@@ -1041,7 +1470,18 @@ export default function BookmarksDirectoryView({
     }),
   );
 
-  // Category stats calculation
+  // Dynamic Category Options combined with custom categories
+  const categoryOptions: CategoryOption[] = useMemo(() => {
+    const customOptions: CategoryOption[] = customCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      tag: c.tag,
+      icon: <Tag className="size-3.5 text-amber-500" />,
+    }));
+    return [...DEFAULT_CATEGORY_OPTIONS, ...customOptions];
+  }, [customCategories]);
+
+  // Category stats calculation (useful categories only)
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {
       all: bookmarks.length,
@@ -1053,15 +1493,11 @@ export default function BookmarksDirectoryView({
       video: 0,
       "article-blog": 0,
       "social-thread": 0,
-      "audio-podcast": 0,
-      "document-pdf": 0,
-      "product-tool": 0,
-      settings: 0,
-      hooks: 0,
-      mcps: 0,
-      mods: 0,
-      plugins: 0,
     };
+
+    for (const cust of customCategories) {
+      stats[cust.id] = 0;
+    }
 
     for (const b of bookmarks) {
       const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
@@ -1102,21 +1538,16 @@ export default function BookmarksDirectoryView({
         /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
       )
         stats["social-thread"]++;
-      if (
-        tagNames.includes("audio & podcast") ||
-        /(spotify|podcast|audio|\.mp3)/i.test(fullText)
-      )
-        stats["audio-podcast"]++;
-      if (
-        tagNames.includes("document & pdf") ||
-        /(\.pdf|doc|paper)/i.test(fullText)
-      )
-        stats["document-pdf"]++;
-      if (
-        tagNames.includes("product & tool") ||
-        /(producthunt|saas|tool)/i.test(fullText)
-      )
-        stats["product-tool"]++;
+
+      for (const cust of customCategories) {
+        if (
+          tagNames.includes(cust.tag.toLowerCase()) ||
+          tagNames.includes(cust.name.toLowerCase()) ||
+          fullText.includes(cust.tag.toLowerCase())
+        ) {
+          stats[cust.id]++;
+        }
+      }
     }
 
     if (dbCounts) {
@@ -1148,29 +1579,19 @@ export default function BookmarksDirectoryView({
         stats["social-thread"],
         dbMax(["social & thread", "social-thread", "social", "thread"]),
       );
-      stats["audio-podcast"] = Math.max(
-        stats["audio-podcast"],
-        dbMax(["audio & podcast", "audio-podcast", "audio", "podcast"]),
-      );
-      stats["document-pdf"] = Math.max(
-        stats["document-pdf"],
-        dbMax(["document & pdf", "document-pdf", "document", "pdf"]),
-      );
-      stats["product-tool"] = Math.max(
-        stats["product-tool"],
-        dbMax(["product & tool", "product-tool", "product", "tool"]),
-      );
-      stats.hooks = Math.max(stats.hooks, dbMax(["hooks", "hook"]));
-      stats.mcps = Math.max(stats.mcps, dbMax(["mcps", "mcp"]));
-      stats.mods = Math.max(stats.mods, dbMax(["mods", "mod"]));
-      stats.plugins = Math.max(stats.plugins, dbMax(["plugins", "plugin"]));
+      for (const cust of customCategories) {
+        stats[cust.id] = Math.max(
+          stats[cust.id] || 0,
+          dbMax([cust.tag.toLowerCase(), cust.name.toLowerCase()]),
+        );
+      }
     }
 
     return stats;
-  }, [bookmarks, dbCounts]);
+  }, [bookmarks, dbCounts, customCategories]);
 
-  const categories: CategoryDef[] = useMemo(
-    () => [
+  const categories: CategoryDef[] = useMemo(() => {
+    const defaultDefs: CategoryDef[] = [
       {
         id: "skills",
         name: "Skills",
@@ -1252,9 +1673,20 @@ export default function BookmarksDirectoryView({
         description: "Curated social discussions, threads, and community posts",
         tags: ["discussions", "twitter"],
       },
-    ],
-    [categoryStats],
-  );
+    ];
+
+    const customDefs: CategoryDef[] = customCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      count: categoryStats[c.id] || 0,
+      icon: <Tag className="size-4 text-amber-500" />,
+      iconBg: "bg-amber-500/10 border-amber-500/20 text-amber-500",
+      description: c.description || `Custom category: ${c.name}`,
+      tags: [c.tag],
+    }));
+
+    return [...defaultDefs, ...customDefs];
+  }, [categoryStats, customCategories]);
 
   const currentCategoryObj = useMemo(
     () =>
@@ -1276,47 +1708,65 @@ export default function BookmarksDirectoryView({
     let result = bookmarks;
 
     if (activeCategory !== "all") {
-      result = result.filter((b) => {
-        const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
-        const title = (getBookmarkTitle(b) ?? "").toLowerCase();
-        const summary = (b.summary ?? b.note ?? "").toLowerCase();
-        const url = (getSourceUrl(b) ?? "").toLowerCase();
-        const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
+      const customMatch = customCategories.find((c) => c.id === activeCategory);
+      if (customMatch) {
+        result = result.filter((b) => {
+          const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+          const title = (getBookmarkTitle(b) ?? "").toLowerCase();
+          const summary = (b.summary ?? b.note ?? "").toLowerCase();
+          const url = (getSourceUrl(b) ?? "").toLowerCase();
+          const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
+          return (
+            tagNames.includes(customMatch.tag.toLowerCase()) ||
+            tagNames.includes(customMatch.name.toLowerCase()) ||
+            fullText.includes(customMatch.tag.toLowerCase())
+          );
+        });
+      } else {
+        result = result.filter((b) => {
+          const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+          const title = (getBookmarkTitle(b) ?? "").toLowerCase();
+          const summary = (b.summary ?? b.note ?? "").toLowerCase();
+          const url = (getSourceUrl(b) ?? "").toLowerCase();
+          const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
-        if (activeCategory === "skills")
-          return tagNames.includes("skills") || fullText.includes("skill");
-        if (activeCategory === "agents")
-          return tagNames.includes("agents") || fullText.includes("agent");
-        if (activeCategory === "commands")
-          return tagNames.includes("commands") || fullText.includes("command");
-        if (activeCategory === "share-image")
-          return (
-            tagNames.includes("share image") ||
-            b.content.type === BookmarkTypes.ASSET ||
-            /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
-          );
-        if (activeCategory === "code-tech")
-          return (
-            tagNames.includes("code & tech") ||
-            /(github|stack|dev\.to|npm|code)/i.test(fullText)
-          );
-        if (activeCategory === "video")
-          return (
-            tagNames.includes("video") ||
-            /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
-          );
-        if (activeCategory === "article-blog")
-          return (
-            tagNames.includes("article & blog") ||
-            /(medium|substack|blog|article)/i.test(fullText)
-          );
-        if (activeCategory === "social-thread")
-          return (
-            tagNames.includes("social & thread") ||
-            /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
-          );
-        return true;
-      });
+          if (activeCategory === "skills")
+            return tagNames.includes("skills") || fullText.includes("skill");
+          if (activeCategory === "agents")
+            return tagNames.includes("agents") || fullText.includes("agent");
+          if (activeCategory === "commands")
+            return (
+              tagNames.includes("commands") || fullText.includes("command")
+            );
+          if (activeCategory === "share-image")
+            return (
+              tagNames.includes("share image") ||
+              b.content.type === BookmarkTypes.ASSET ||
+              /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
+            );
+          if (activeCategory === "code-tech")
+            return (
+              tagNames.includes("code & tech") ||
+              /(github|stack|dev\.to|npm|code)/i.test(fullText)
+            );
+          if (activeCategory === "video")
+            return (
+              tagNames.includes("video") ||
+              /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
+            );
+          if (activeCategory === "article-blog")
+            return (
+              tagNames.includes("article & blog") ||
+              /(medium|substack|blog|article)/i.test(fullText)
+            );
+          if (activeCategory === "social-thread")
+            return (
+              tagNames.includes("social & thread") ||
+              /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
+            );
+          return true;
+        });
+      }
     }
 
     if (searchQuery.trim()) {
@@ -1346,7 +1796,7 @@ export default function BookmarksDirectoryView({
     }
 
     return result;
-  }, [bookmarks, activeCategory, searchQuery, sortBy]);
+  }, [bookmarks, activeCategory, searchQuery, sortBy, customCategories]);
 
   // Reset display page when filter/sort changes
   useEffect(() => {
@@ -1601,9 +2051,19 @@ export default function BookmarksDirectoryView({
           {/* BROWSE CATEGORIES */}
           <div>
             {showSidebar && (
-              <h4 className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                BROWSE
-              </h4>
+              <div className="flex items-center justify-between px-2">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  CATEGORIES
+                </h4>
+                <button
+                  onClick={() => setIsCreateCategoryOpen(true)}
+                  className="flex items-center gap-1 text-[10px] font-bold text-amber-600 transition-colors hover:underline dark:text-amber-400"
+                  title="Create new category"
+                >
+                  <Plus className="size-3" />
+                  <span>+ New</span>
+                </button>
+              </div>
             )}
             <div className="mt-2 space-y-1">
               {categories.map((cat) => {
@@ -1641,49 +2101,16 @@ export default function BookmarksDirectoryView({
                 );
               })}
 
-              {/* Extra menu items */}
-              {[
-                {
-                  name: "Settings",
-                  count: categoryStats.settings,
-                  icon: <Settings className="size-4 text-gray-400" />,
-                },
-                {
-                  name: "Hooks",
-                  count: categoryStats.hooks,
-                  icon: <Webhook className="size-4 text-gray-400" />,
-                },
-                {
-                  name: "MCPs",
-                  count: categoryStats.mcps,
-                  icon: <Cpu className="size-4 text-gray-400" />,
-                },
-                {
-                  name: "Mods",
-                  count: categoryStats.mods,
-                  icon: <Wrench className="size-4 text-gray-400" />,
-                },
-                {
-                  name: "Plugins",
-                  count: categoryStats.plugins,
-                  icon: <Boxes className="size-4 text-gray-400" />,
-                },
-              ].map((item) => (
-                <div
-                  key={item.name}
-                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+              {/* Sidebar Create Category Option Button */}
+              {showSidebar && (
+                <button
+                  onClick={() => setIsCreateCategoryOpen(true)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-amber-500/30 bg-amber-500/5 px-2.5 py-1.5 text-xs font-semibold text-amber-600 transition-all hover:bg-amber-500/10 dark:text-amber-400"
                 >
-                  <div className="shrink-0">{item.icon}</div>
-                  {showSidebar && (
-                    <span className="flex-1 text-left">{item.name}</span>
-                  )}
-                  {showSidebar && (
-                    <span className="text-[10px] text-muted-foreground/60">
-                      {item.count}
-                    </span>
-                  )}
-                </div>
-              ))}
+                  <Plus className="size-3.5 text-amber-500" />
+                  <span>+ Create Category</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1899,18 +2326,29 @@ export default function BookmarksDirectoryView({
               </div>
 
               {/* Category Select Dropdown */}
-              <select
-                value={activeCategory}
-                onChange={(e) => setActiveCategory(e.target.value)}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground focus:border-amber-500 focus:outline-none"
-              >
-                <option value="all">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={activeCategory}
+                  onChange={(e) => setActiveCategory(e.target.value)}
+                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="all">All categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => setIsCreateCategoryOpen(true)}
+                  className="flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
+                  title="Create new category"
+                >
+                  <Plus className="size-3.5" />
+                  <span>Category</span>
+                </button>
+              </div>
 
               {/* View Mode Toggle */}
               <div className="flex items-center rounded-lg border border-border bg-background p-0.5">
@@ -2039,6 +2477,10 @@ export default function BookmarksDirectoryView({
                   onOpenEmbed={handleOpenEmbed}
                   onSingleDelete={handleSingleDelete}
                   onSingleCategoryChange={handleSingleCategoryChange}
+                  categoryOptions={categoryOptions}
+                  onOpenCreateCategoryModal={() =>
+                    setIsCreateCategoryOpen(true)
+                  }
                 />
               ))}
             </div>
@@ -2095,7 +2537,7 @@ export default function BookmarksDirectoryView({
                 to:
               </div>
               <DropdownMenuSeparator />
-              {CATEGORY_OPTIONS.map((opt) => (
+              {categoryOptions.map((opt) => (
                 <DropdownMenuItem
                   key={opt.id}
                   onClick={() => handleBulkCategoryChange(opt.tag, opt.name)}
@@ -2105,6 +2547,14 @@ export default function BookmarksDirectoryView({
                   <span>{opt.name}</span>
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setIsCreateCategoryOpen(true)}
+                className="flex cursor-pointer items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400"
+              >
+                <Plus className="size-3.5 text-amber-500" />
+                <span>+ Create Category</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -2140,6 +2590,9 @@ export default function BookmarksDirectoryView({
           onClose={handleCloseEmbed}
           onSingleCategoryChange={handleSingleCategoryChange}
           onSingleDelete={handleSingleDelete}
+          categoryOptions={categoryOptions}
+          onOpenCreateCategoryModal={() => setIsCreateCategoryOpen(true)}
+          onRefreshWorkspace={refreshWorkspace}
         />
       )}
 
@@ -2148,6 +2601,13 @@ export default function BookmarksDirectoryView({
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         message={authModalMessage}
+      />
+
+      {/* 6. Create Custom Category Dialog Modal */}
+      <CreateCategoryModal
+        isOpen={isCreateCategoryOpen}
+        onClose={() => setIsCreateCategoryOpen(false)}
+        onCreateCategory={handleCreateCategory}
       />
     </div>
   );
