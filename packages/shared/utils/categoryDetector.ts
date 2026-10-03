@@ -10,6 +10,7 @@ export const POST_CATEGORIES = {
   AUDIO_PODCAST: "Audio & Podcast",
   DOCUMENT_PDF: "Document & PDF",
   PRODUCT_TOOL: "Product & Tool",
+  WEBSITE: "Website",
 } as const;
 
 export type PostCategory =
@@ -42,6 +43,14 @@ export function detectPostCategory(item: {
   }
   if (fullText.includes("command") || tags.some((t) => t.includes("command"))) {
     return POST_CATEGORIES.COMMANDS;
+  }
+
+  // 1b. Website category check
+  if (
+    tags.some((t) => t.includes("website") || t === "site" || t === "web") ||
+    fullText.includes("website")
+  ) {
+    return POST_CATEGORIES.WEBSITE;
   }
 
   // 2. Share Image detection
@@ -139,5 +148,5 @@ export function detectPostCategory(item: {
 
   // Fallback default category
   if (isImageKeyword) return POST_CATEGORIES.SHARE_IMAGE;
-  return POST_CATEGORIES.ARTICLE_BLOG;
+  return POST_CATEGORIES.WEBSITE;
 }
