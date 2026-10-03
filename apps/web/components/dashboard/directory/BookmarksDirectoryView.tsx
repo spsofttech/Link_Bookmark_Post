@@ -1374,6 +1374,9 @@ const SettingsModal = memo(function SettingsModal({
   setHideAdminPosts,
   onOpenSubscriptionModal,
   onRemoveCategory,
+  hiddenCategoryIds = [],
+  onRestoreCategory,
+  categories = [],
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1385,6 +1388,9 @@ const SettingsModal = memo(function SettingsModal({
   setHideAdminPosts: (v: boolean) => void;
   onOpenSubscriptionModal: () => void;
   onRemoveCategory?: (id: string, name?: string) => void;
+  hiddenCategoryIds?: string[];
+  onRestoreCategory?: (id: string, name: string) => void;
+  categories?: CategoryDef[];
 }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
@@ -2194,7 +2200,7 @@ const SettingsModal = memo(function SettingsModal({
                       Category Management
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Organize custom workspace categories and tags
+                      Organize and remove categories from your workspace view
                     </p>
                   </div>
                   <button
@@ -2212,50 +2218,89 @@ const SettingsModal = memo(function SettingsModal({
 
                 <div className="space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Active Custom Categories ({customCategories.length})
+                    Active Categories (
+                    {
+                      categories.filter(
+                        (c) => !hiddenCategoryIds.includes(c.id),
+                      ).length
+                    }
+                    )
                   </div>
-                  {customCategories.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border py-4 text-center text-xs italic text-muted-foreground">
-                      No custom categories created yet. Click &quot;+ Create
-                      Category&quot; above to add one.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      {customCategories.map((cat) => (
+                  <div className="grid grid-cols-2 gap-3">
+                    {categories
+                      .filter((c) => !hiddenCategoryIds.includes(c.id))
+                      .map((cat) => (
                         <div
                           key={cat.id}
                           className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-3"
                         >
-                          <div>
-                            <div className="text-xs font-bold text-foreground">
-                              {cat.name}
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex size-7 items-center justify-center rounded-lg border border-border bg-background">
+                              {cat.icon}
                             </div>
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              #{cat.tag}
+                            <div>
+                              <div className="text-xs font-bold text-foreground">
+                                {cat.name}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {cat.count} items
+                              </div>
                             </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (onRemoveCategory) {
-                                onRemoveCategory(cat.id, cat.name);
-                              } else {
-                                setCustomCategories((prev) =>
-                                  prev.filter((c) => c.id !== cat.id),
-                                );
-                                toast.success(`Category "${cat.name}" removed`);
-                              }
-                            }}
+                            onClick={() => onRemoveCategory?.(cat.id, cat.name)}
                             className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
                             title={`Remove category "${cat.name}"`}
                           >
-                            <Trash2 className="size-3.5" />
+                            <Trash2 className="size-3.5 text-red-500" />
                           </button>
                         </div>
                       ))}
-                    </div>
-                  )}
+                  </div>
                 </div>
+
+                {hiddenCategoryIds.length > 0 && (
+                  <div className="space-y-2 border-t border-border pt-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Hidden / Removed Categories ({hiddenCategoryIds.length})
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {categories
+                        .filter((c) => hiddenCategoryIds.includes(c.id))
+                        .map((cat) => (
+                          <div
+                            key={cat.id}
+                            className="flex items-center justify-between rounded-xl border border-dashed border-border bg-muted/10 p-3"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex size-7 items-center justify-center rounded-lg border border-border bg-background opacity-60">
+                                {cat.icon}
+                              </div>
+                              <div>
+                                <div className="text-xs font-bold text-muted-foreground">
+                                  {cat.name}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  Hidden from sidebar
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onRestoreCategory?.(cat.id, cat.name)
+                              }
+                              className="flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+                            >
+                              <RefreshCw className="size-3" />
+                              <span>Restore</span>
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2353,30 +2398,85 @@ export default function BookmarksDirectoryView({
     [],
   );
 
+  // Hidden Categories State (for removing any category from workspace view)
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("karakeep_hidden_categories_v1");
+        if (stored) return JSON.parse(stored);
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return [];
+  });
+
   const handleRemoveCategory = useCallback(
     (catId: string, catName?: string) => {
-      setCustomCategories((prev) => {
-        const target = prev.find((c) => c.id === catId);
-        const nameToUse = catName || target?.name || catId;
-        const updated = prev.filter((c) => c.id !== catId);
+      const isCustom = customCategories.some((c) => c.id === catId);
+      if (isCustom) {
+        setCustomCategories((prev) => {
+          const target = prev.find((c) => c.id === catId);
+          const nameToUse = catName || target?.name || catId;
+          const updated = prev.filter((c) => c.id !== catId);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(
+                "karakeep_custom_categories_v1",
+                JSON.stringify(updated),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
+          toast.success(`Category "${nameToUse}" removed successfully!`);
+          return updated;
+        });
+      } else {
+        setHiddenCategoryIds((prev) => {
+          if (prev.includes(catId)) return prev;
+          const updated = [...prev, catId];
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(
+                "karakeep_hidden_categories_v1",
+                JSON.stringify(updated),
+              );
+            } catch {
+              // ignore storage errors
+            }
+          }
+          toast.success(`Category "${catName || catId}" removed from view!`);
+          return updated;
+        });
+      }
+
+      if (activeCategory === catId) {
+        setActiveCategory("all");
+      }
+    },
+    [activeCategory, customCategories],
+  );
+
+  const handleRestoreCategory = useCallback(
+    (catId: string, catName: string) => {
+      setHiddenCategoryIds((prev) => {
+        const updated = prev.filter((id) => id !== catId);
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem(
-              "karakeep_custom_categories_v1",
+              "karakeep_hidden_categories_v1",
               JSON.stringify(updated),
             );
           } catch {
             // ignore storage errors
           }
         }
-        toast.success(`Category "${nameToUse}" removed successfully!`);
+        toast.success(`Category "${catName}" restored to workspace!`);
         return updated;
       });
-      if (activeCategory === catId) {
-        setActiveCategory("all");
-      }
     },
-    [activeCategory],
+    [],
   );
 
   // Multi-Selection State
@@ -2754,6 +2854,10 @@ export default function BookmarksDirectoryView({
 
     return [...defaultDefs, ...customDefs];
   }, [categoryStats, customCategories]);
+
+  const visibleCategories = useMemo(() => {
+    return categories.filter((c) => !hiddenCategoryIds.includes(c.id));
+  }, [categories, hiddenCategoryIds]);
 
   const currentCategoryObj = useMemo(
     () =>
@@ -3189,9 +3293,8 @@ export default function BookmarksDirectoryView({
               </div>
             )}
             <div className="mt-2 space-y-1">
-              {categories.map((cat) => {
+              {visibleCategories.map((cat) => {
                 const isActive = activeCategory === cat.id;
-                const isCustom = customCategories.some((c) => c.id === cat.id);
                 return (
                   <div
                     key={cat.id}
@@ -3201,7 +3304,7 @@ export default function BookmarksDirectoryView({
                       onClick={() => setActiveCategory(cat.id)}
                       className={cn(
                         "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all",
-                        isCustom && showSidebar ? "pr-8" : "",
+                        showSidebar ? "pr-8" : "",
                         isActive
                           ? "shadow-xs bg-amber-500/10 font-semibold text-amber-600 dark:text-amber-400"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -3226,7 +3329,7 @@ export default function BookmarksDirectoryView({
                         </span>
                       )}
                     </button>
-                    {isCustom && showSidebar && (
+                    {showSidebar && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -3431,7 +3534,7 @@ export default function BookmarksDirectoryView({
                 </p>
               </div>
             </div>
-            {customCategories.some((c) => c.id === activeCategory) && (
+            {activeCategory !== "all" && (
               <button
                 type="button"
                 onClick={() =>
@@ -3493,7 +3596,7 @@ export default function BookmarksDirectoryView({
                   className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none"
                 >
                   <option value="all">All categories</option>
-                  {categories.map((c) => (
+                  {visibleCategories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -3789,6 +3892,9 @@ export default function BookmarksDirectoryView({
         setHideAdminPosts={setHideAdminPosts}
         onOpenSubscriptionModal={() => setSubscriptionModalOpen(true)}
         onRemoveCategory={handleRemoveCategory}
+        hiddenCategoryIds={hiddenCategoryIds}
+        onRestoreCategory={handleRestoreCategory}
+        categories={categories}
       />
     </div>
   );
