@@ -148,12 +148,6 @@ export interface CategoryOption {
 
 const DEFAULT_CATEGORY_OPTIONS: CategoryOption[] = [
   {
-    id: "website",
-    name: "Website",
-    tag: "website",
-    icon: <Globe className="size-3.5 text-emerald-500" />,
-  },
-  {
     id: "skills",
     name: "Skills",
     tag: "skills",
@@ -1379,6 +1373,7 @@ const SettingsModal = memo(function SettingsModal({
   hideAdminPosts,
   setHideAdminPosts,
   onOpenSubscriptionModal,
+  onRemoveCategory,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1389,6 +1384,7 @@ const SettingsModal = memo(function SettingsModal({
   hideAdminPosts: boolean;
   setHideAdminPosts: (v: boolean) => void;
   onOpenSubscriptionModal: () => void;
+  onRemoveCategory?: (id: string, name?: string) => void;
 }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
@@ -2241,12 +2237,17 @@ const SettingsModal = memo(function SettingsModal({
                           <button
                             type="button"
                             onClick={() => {
-                              setCustomCategories((prev) =>
-                                prev.filter((c) => c.id !== cat.id),
-                              );
-                              toast.success(`Category "${cat.name}" removed`);
+                              if (onRemoveCategory) {
+                                onRemoveCategory(cat.id, cat.name);
+                              } else {
+                                setCustomCategories((prev) =>
+                                  prev.filter((c) => c.id !== cat.id),
+                                );
+                                toast.success(`Category "${cat.name}" removed`);
+                              }
                             }}
                             className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
+                            title={`Remove category "${cat.name}"`}
                           >
                             <Trash2 className="size-3.5" />
                           </button>
@@ -2350,6 +2351,32 @@ export default function BookmarksDirectoryView({
       setActiveCategory(id);
     },
     [],
+  );
+
+  const handleRemoveCategory = useCallback(
+    (catId: string, catName?: string) => {
+      setCustomCategories((prev) => {
+        const target = prev.find((c) => c.id === catId);
+        const nameToUse = catName || target?.name || catId;
+        const updated = prev.filter((c) => c.id !== catId);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              "karakeep_custom_categories_v1",
+              JSON.stringify(updated),
+            );
+          } catch {
+            // ignore storage errors
+          }
+        }
+        toast.success(`Category "${nameToUse}" removed successfully!`);
+        return updated;
+      });
+      if (activeCategory === catId) {
+        setActiveCategory("all");
+      }
+    },
+    [activeCategory],
   );
 
   // Multi-Selection State
@@ -2511,7 +2538,6 @@ export default function BookmarksDirectoryView({
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {
       all: localBookmarks.length,
-      website: 0,
       skills: 0,
       agents: 0,
       commands: 0,
@@ -2533,13 +2559,6 @@ export default function BookmarksDirectoryView({
       const url = (getSourceUrl(b) ?? "").toLowerCase();
       const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
-      if (
-        tagNames.includes("website") ||
-        tagNames.includes("web") ||
-        tagNames.includes("sites") ||
-        fullText.includes("website")
-      )
-        stats.website++;
       if (tagNames.includes("skills") || fullText.includes("skill"))
         stats.skills++;
       if (tagNames.includes("agents") || fullText.includes("agent"))
@@ -2607,10 +2626,6 @@ export default function BookmarksDirectoryView({
       const dbMax = (keys: string[]) =>
         keys.reduce((acc, k) => acc + (dbTagMap.get(k) ?? 0), 0);
 
-      stats.website = Math.max(
-        stats.website,
-        dbMax(["website", "web", "sites"]),
-      );
       stats.skills = Math.max(stats.skills, dbMax(["skills", "skill"]));
       stats.agents = Math.max(stats.agents, dbMax(["agents", "agent"]));
       stats.commands = Math.max(stats.commands, dbMax(["commands", "command"]));
@@ -2644,16 +2659,6 @@ export default function BookmarksDirectoryView({
 
   const categories: CategoryDef[] = useMemo(() => {
     const defaultDefs: CategoryDef[] = [
-      {
-        id: "website",
-        name: "Website",
-        count: categoryStats.website,
-        icon: <Globe className="size-4 text-emerald-500" />,
-        iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-500",
-        description:
-          "Curated websites, web pages, documentation, and online resources",
-        tags: ["website", "web", "sites"],
-      },
       {
         id: "skills",
         name: "Skills",
@@ -2808,13 +2813,6 @@ export default function BookmarksDirectoryView({
           const url = (getSourceUrl(b) ?? "").toLowerCase();
           const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
-          if (activeCategory === "website")
-            return (
-              tagNames.includes("website") ||
-              tagNames.includes("web") ||
-              tagNames.includes("sites") ||
-              fullText.includes("website")
-            );
           if (activeCategory === "skills")
             return tagNames.includes("skills") || fullText.includes("skill");
           if (activeCategory === "agents")
@@ -3193,36 +3191,54 @@ export default function BookmarksDirectoryView({
             <div className="mt-2 space-y-1">
               {categories.map((cat) => {
                 const isActive = activeCategory === cat.id;
+                const isCustom = customCategories.some((c) => c.id === cat.id);
                 return (
-                  <button
+                  <div
                     key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all",
-                      isActive
-                        ? "shadow-xs bg-amber-500/10 font-semibold text-amber-600 dark:text-amber-400"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                    )}
+                    className="group relative flex items-center"
                   >
-                    <div className="shrink-0">{cat.icon}</div>
-                    {showSidebar && (
-                      <span className="line-clamp-1 flex-1 text-left">
-                        {cat.name}
-                      </span>
-                    )}
-                    {showSidebar && (
-                      <span
-                        className={cn(
-                          "rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-                          isActive
-                            ? "bg-amber-500/20 text-amber-600 dark:text-amber-300"
-                            : "bg-muted text-muted-foreground",
-                        )}
+                    <button
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={cn(
+                        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all",
+                        isActive
+                          ? "shadow-xs bg-amber-500/10 font-semibold text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <div className="shrink-0">{cat.icon}</div>
+                      {showSidebar && (
+                        <span className="line-clamp-1 flex-1 text-left">
+                          {cat.name}
+                        </span>
+                      )}
+                      {showSidebar && (
+                        <span
+                          className={cn(
+                            "rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                            isActive
+                              ? "bg-amber-500/20 text-amber-600 dark:text-amber-300"
+                              : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {cat.count}
+                        </span>
+                      )}
+                    </button>
+                    {isCustom && showSidebar && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCategory(cat.id, cat.name);
+                        }}
+                        className="absolute right-1 flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                        title={`Remove category "${cat.name}"`}
                       >
-                        {cat.count}
-                      </span>
+                        <Trash2 className="size-3 text-red-500" />
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
 
@@ -3395,23 +3411,38 @@ export default function BookmarksDirectoryView({
           </div>
 
           {/* Active Category Header Banner */}
-          <div className="shadow-xs flex items-center gap-5 rounded-2xl border border-border bg-card p-6">
-            <div
-              className={cn(
-                "shadow-xs flex size-14 shrink-0 items-center justify-center rounded-2xl border p-3",
-                currentCategoryObj.iconBg,
-              )}
-            >
-              {currentCategoryObj.icon}
+          <div className="shadow-xs flex items-center justify-between rounded-2xl border border-border bg-card p-6">
+            <div className="flex items-center gap-5">
+              <div
+                className={cn(
+                  "shadow-xs flex size-14 shrink-0 items-center justify-center rounded-2xl border p-3",
+                  currentCategoryObj.iconBg,
+                )}
+              >
+                {currentCategoryObj.icon}
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                  {currentCategoryObj.name}
+                </h1>
+                <p className="max-w-xl text-xs text-muted-foreground">
+                  {currentCategoryObj.description}
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {currentCategoryObj.name}
-              </h1>
-              <p className="max-w-xl text-xs text-muted-foreground">
-                {currentCategoryObj.description}
-              </p>
-            </div>
+            {customCategories.some((c) => c.id === activeCategory) && (
+              <button
+                type="button"
+                onClick={() =>
+                  handleRemoveCategory(activeCategory, currentCategoryObj.name)
+                }
+                className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
+                title={`Remove category "${currentCategoryObj.name}"`}
+              >
+                <Trash2 className="size-4" />
+                <span>Remove Category</span>
+              </button>
+            )}
           </div>
 
           {/* Controls & Filter Bar */}
@@ -3756,6 +3787,7 @@ export default function BookmarksDirectoryView({
         hideAdminPosts={hideAdminPosts}
         setHideAdminPosts={setHideAdminPosts}
         onOpenSubscriptionModal={() => setSubscriptionModalOpen(true)}
+        onRemoveCategory={handleRemoveCategory}
       />
     </div>
   );
