@@ -3201,6 +3201,7 @@ export default function BookmarksDirectoryView({
                       onClick={() => setActiveCategory(cat.id)}
                       className={cn(
                         "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all",
+                        isCustom && showSidebar ? "pr-8" : "",
                         isActive
                           ? "shadow-xs bg-amber-500/10 font-semibold text-amber-600 dark:text-amber-400"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -3232,10 +3233,10 @@ export default function BookmarksDirectoryView({
                           e.stopPropagation();
                           handleRemoveCategory(cat.id, cat.name);
                         }}
-                        className="absolute right-1 flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                        className="absolute right-1.5 flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-red-500/15 hover:text-red-500 group-hover:opacity-100"
                         title={`Remove category "${cat.name}"`}
                       >
-                        <Trash2 className="size-3 text-red-500" />
+                        <Trash2 className="size-3.5 text-red-500" />
                       </button>
                     )}
                   </div>
