@@ -2653,7 +2653,23 @@ export default function BookmarksDirectoryView({
     }
 
     for (const b of localBookmarks) {
-      const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+      const tagNames = (b.tags ?? [])
+        .map((t) => {
+          if (typeof t === "string") return (t as string).toLowerCase();
+          if (typeof t === "object" && t !== null) {
+            return (
+              (t as { name?: string; tagName?: string; label?: string }).name ||
+              (t as { name?: string; tagName?: string; label?: string })
+                .tagName ||
+              (t as { name?: string; tagName?: string; label?: string })
+                .label ||
+              ""
+            ).toLowerCase();
+          }
+          return "";
+        })
+        .filter(Boolean);
+
       const title = (getBookmarkTitle(b) ?? "").toLowerCase();
       const summary = (b.summary ?? b.note ?? "").toLowerCase();
       const url = (getSourceUrl(b) ?? "").toLowerCase();
@@ -2704,10 +2720,20 @@ export default function BookmarksDirectoryView({
           ""
         ).toLowerCase();
 
+        const matchesTag = tagNames.some(
+          (t) =>
+            t === cTag ||
+            t === cName ||
+            t === cId ||
+            t.includes(cTag) ||
+            t.includes(cName),
+        );
+
+        const matchesText = fullText.includes(cTag) || fullText.includes(cName);
+
         if (
-          tagNames.includes(cTag) ||
-          tagNames.includes(cName) ||
-          tagNames.includes(cId) ||
+          matchesTag ||
+          matchesText ||
           bCat === cId ||
           bCat === cTag ||
           bCat === cName
@@ -2749,13 +2775,17 @@ export default function BookmarksDirectoryView({
       for (const cust of customCategories) {
         stats[cust.id] = Math.max(
           stats[cust.id] || 0,
-          dbMax([cust.tag.toLowerCase(), cust.name.toLowerCase()]),
+          dbMax([
+            cust.tag.toLowerCase(),
+            cust.name.toLowerCase(),
+            cust.id.toLowerCase(),
+          ]),
         );
       }
     }
 
     return stats;
-  }, [bookmarks, dbCounts, customCategories]);
+  }, [localBookmarks, dbCounts, customCategories]);
 
   const categories: CategoryDef[] = useMemo(() => {
     const defaultDefs: CategoryDef[] = [
