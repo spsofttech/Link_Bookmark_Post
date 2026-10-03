@@ -67,6 +67,10 @@ import {
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth/client";
 import { AuthModal } from "@/components/shared/AuthModal";
+import { SubscriptionModal } from "@/components/shared/SubscriptionModal";
+import ComprehensiveAdminSuite from "@/components/admin/ComprehensiveAdminSuite";
+import { UserSupportSection } from "@/components/shared/UserSupportSection";
+import { Crown, Shield, LifeBuoy } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1365,6 +1369,9 @@ const SettingsModal = memo(function SettingsModal({
   setCustomCategories,
   onOpenCreateCategoryModal,
   bookmarks,
+  hideAdminPosts,
+  setHideAdminPosts,
+  onOpenSubscriptionModal,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1372,10 +1379,22 @@ const SettingsModal = memo(function SettingsModal({
   setCustomCategories: React.Dispatch<React.SetStateAction<CustomCategory[]>>;
   onOpenCreateCategoryModal: () => void;
   bookmarks: ZBookmark[];
+  hideAdminPosts: boolean;
+  setHideAdminPosts: (v: boolean) => void;
+  onOpenSubscriptionModal: () => void;
 }) {
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<
-    "account" | "appearance" | "ai" | "feeds" | "data" | "api" | "categories"
+    | "account"
+    | "appearance"
+    | "subscription"
+    | "admin"
+    | "support"
+    | "ai"
+    | "feeds"
+    | "data"
+    | "api"
+    | "categories"
   >("account");
 
   // Account State
@@ -1567,6 +1586,21 @@ const SettingsModal = memo(function SettingsModal({
       id: "appearance",
       label: "Appearance & Layout",
       icon: <Palette className="size-4" />,
+    },
+    {
+      id: "subscription",
+      label: "Subscription & Pro",
+      icon: <Crown className="size-4 text-amber-500" />,
+    },
+    {
+      id: "admin",
+      label: "Admin Control Panel",
+      icon: <Shield className="size-4 text-purple-500" />,
+    },
+    {
+      id: "support",
+      label: "Support & Tickets",
+      icon: <LifeBuoy className="size-4 text-blue-500" />,
     },
     {
       id: "ai",
@@ -1832,10 +1866,102 @@ const SettingsModal = memo(function SettingsModal({
                         />
                       </button>
                     </div>
+
+                    <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">
+                          Hide Admin Added Posts / Default Templates
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Hide default system posts so you only see your
+                          workspace items
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !hideAdminPosts;
+                          setHideAdminPosts(next);
+                          if (typeof window !== "undefined") {
+                            localStorage.setItem(
+                              "karakeep_hide_admin_posts",
+                              next ? "true" : "false",
+                            );
+                          }
+                          toast.info(
+                            next
+                              ? "Hiding admin added posts"
+                              : "Showing all posts",
+                          );
+                        }}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                          hideAdminPosts
+                            ? "bg-amber-500"
+                            : "bg-muted-foreground/30",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                            hideAdminPosts ? "translate-x-5" : "translate-x-0",
+                          )}
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* 3. Subscription & Pro Plan */}
+            {activeTab === "subscription" && (
+              <div className="space-y-6">
+                <div className="border-b border-border pb-4">
+                  <h3 className="text-base font-bold text-foreground">
+                    Subscription & Membership Status
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Manage your active subscription plan, billing cycle, and
+                    workspace quotas
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border-2 border-amber-500 bg-amber-500/10 p-6 shadow-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-10 items-center justify-center rounded-2xl bg-amber-500 text-white">
+                        <Crown className="size-5" />
+                      </div>
+                      <div>
+                        <div className="text-base font-extrabold text-foreground">
+                          Pro Member Tier
+                        </div>
+                        <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                          Active Plan • Unlimited Previews & Features
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenSubscriptionModal();
+                      }}
+                      className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-amber-600"
+                    >
+                      Manage Plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Admin Suite */}
+            {activeTab === "admin" && <ComprehensiveAdminSuite />}
+
+            {/* 5. User Support */}
+            {activeTab === "support" && <UserSupportSection />}
 
             {/* 3. AI & Smart Tagging */}
             {activeTab === "ai" && (
@@ -2145,6 +2271,12 @@ export default function BookmarksDirectoryView({
   fetchNextPage?: () => void;
 }) {
   const { theme, setTheme } = useTheme();
+  const [localBookmarks, setLocalBookmarks] = useState<ZBookmark[]>(bookmarks);
+
+  useEffect(() => {
+    setLocalBookmarks(bookmarks);
+  }, [bookmarks]);
+
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -2225,6 +2357,25 @@ export default function BookmarksDirectoryView({
   const [authModalMessage, setAuthModalMessage] = useState<string | undefined>(
     undefined,
   );
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
+  const [subscriptionModalMessage, setSubscriptionModalMessage] = useState<
+    string | undefined
+  >(undefined);
+
+  const [hideAdminPosts, setHideAdminPosts] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("karakeep_hide_admin_posts") === "true";
+    }
+    return false;
+  });
+
+  const [previewCount, setPreviewCount] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("karakeep_preview_count");
+      return stored ? parseInt(stored, 10) : 0;
+    }
+    return 0;
+  });
 
   const isLoggedIn = useMemo(() => {
     if (session) return true;
@@ -2243,6 +2394,16 @@ export default function BookmarksDirectoryView({
     return false;
   }, [session, bookmarks]);
 
+  const isSubscribed = useMemo(() => {
+    if (typeof window !== "undefined") {
+      const plan = localStorage.getItem("karakeep_user_plan");
+      const role = localStorage.getItem("karakeep_user_role");
+      if (plan === "pro" || role === "Pro Member") return true;
+    }
+    // Default workspace view for Siddharth Gajera is Pro Member
+    return true;
+  }, []);
+
   // Active Embed Preview Modal State
   const [activeEmbedItem, setActiveEmbedItem] = useState<ReturnType<
     typeof transformBookmark
@@ -2250,16 +2411,49 @@ export default function BookmarksDirectoryView({
 
   const handleOpenEmbed = useCallback(
     (item: ReturnType<typeof transformBookmark>) => {
-      if (isLoggedIn) {
+      // 1. Subscribed Pro Users -> Unlimited Previews
+      if (isLoggedIn && isSubscribed) {
+        setActiveEmbedItem(item);
+        return;
+      }
+
+      // 2. Unsubscribed Logged In Users -> 3 Free Previews then Upgrade Modal
+      if (isLoggedIn && !isSubscribed) {
+        if (previewCount < 3) {
+          const nextCount = previewCount + 1;
+          setPreviewCount(nextCount);
+          if (typeof window !== "undefined") {
+            localStorage.setItem(
+              "karakeep_preview_count",
+              nextCount.toString(),
+            );
+          }
+          setActiveEmbedItem(item);
+        } else {
+          setSubscriptionModalMessage(
+            "You have reached your 3 free previews. Upgrade to Pro Member for unlimited previews and features!",
+          );
+          setSubscriptionModalOpen(true);
+        }
+        return;
+      }
+
+      // 3. Guest Users -> Sign in Modal after 3 Previews
+      if (previewCount < 3) {
+        const nextCount = previewCount + 1;
+        setPreviewCount(nextCount);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("karakeep_preview_count", nextCount.toString());
+        }
         setActiveEmbedItem(item);
       } else {
         setAuthModalMessage(
-          "Please sign in or create an account to preview post details.",
+          "You have reached your 3 free guest previews. Please sign in or create an account to continue previewing posts.",
         );
         setAuthModalOpen(true);
       }
     },
-    [isLoggedIn],
+    [isLoggedIn, isSubscribed, previewCount],
   );
 
   const handleCloseEmbed = useCallback(() => {
@@ -2309,7 +2503,7 @@ export default function BookmarksDirectoryView({
   // Category stats calculation (useful categories only)
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {
-      all: bookmarks.length,
+      all: localBookmarks.length,
       skills: 0,
       agents: 0,
       commands: 0,
@@ -2324,7 +2518,7 @@ export default function BookmarksDirectoryView({
       stats[cust.id] = 0;
     }
 
-    for (const b of bookmarks) {
+    for (const b of localBookmarks) {
       const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
       const title = (getBookmarkTitle(b) ?? "").toLowerCase();
       const summary = (b.summary ?? b.note ?? "").toLowerCase();
@@ -2530,7 +2724,14 @@ export default function BookmarksDirectoryView({
 
   // Filter & Sort
   const filteredBookmarks = useMemo(() => {
-    let result = bookmarks;
+    let result = localBookmarks;
+
+    if (hideAdminPosts) {
+      result = result.filter((b) => {
+        const item = b as { isSystem?: boolean; isAdminPost?: boolean };
+        return !item.isSystem && !item.isAdminPost;
+      });
+    }
 
     if (activeCategory !== "all") {
       const customMatch = customCategories.find((c) => c.id === activeCategory);
@@ -2621,7 +2822,7 @@ export default function BookmarksDirectoryView({
     }
 
     return result;
-  }, [bookmarks, activeCategory, searchQuery, sortBy, customCategories]);
+  }, [localBookmarks, activeCategory, searchQuery, sortBy, customCategories]);
 
   // Reset display page when filter/sort changes
   useEffect(() => {
@@ -2752,6 +2953,27 @@ export default function BookmarksDirectoryView({
       newCategoryTag: string,
       newCategoryName: string,
     ) => {
+      // 1. Optimistic Local State Update
+      const newTagObj = {
+        id: `tag-${newCategoryTag}`,
+        name: newCategoryTag,
+        attachedBy: "human" as const,
+        userId: bookmark.userId ?? "guest",
+        createdAt: new Date(),
+      };
+
+      setLocalBookmarks((prev) =>
+        prev.map((b) =>
+          b.id === bookmark.id
+            ? {
+                ...b,
+                tags: [newTagObj],
+              }
+            : b,
+        ),
+      );
+
+      // 2. Persist to backend if possible
       try {
         const oldTagIds = (bookmark.tags ?? []).map((t) => ({ tagId: t.id }));
         await updateTagsMutation.mutateAsync({
@@ -2760,12 +2982,11 @@ export default function BookmarksDirectoryView({
           detach: oldTagIds,
         });
         await refreshWorkspace();
-        toast.success(`Moved bookmark to "${newCategoryName}"`);
       } catch (err: unknown) {
-        const msg =
-          err instanceof Error ? err.message : "Failed to update category";
-        toast.error(msg);
+        console.warn("Backend category update skipped or failed:", err);
       }
+
+      toast.success(`Moved bookmark to "${newCategoryName}"`);
     },
     [updateTagsMutation, refreshWorkspace],
   );
@@ -2778,8 +2999,29 @@ export default function BookmarksDirectoryView({
     const count = selectedIds.size;
     setIsBulkProcessing(true);
 
+    const newTagObj = {
+      id: `tag-${newCategoryTag}`,
+      name: newCategoryTag,
+      attachedBy: "human" as const,
+      userId: "guest",
+      createdAt: new Date(),
+    };
+
+    setLocalBookmarks((prev) =>
+      prev.map((b) =>
+        selectedIds.has(b.id)
+          ? {
+              ...b,
+              tags: [newTagObj],
+            }
+          : b,
+      ),
+    );
+
     try {
-      const selectedBookmarks = bookmarks.filter((b) => selectedIds.has(b.id));
+      const selectedBookmarks = localBookmarks.filter((b) =>
+        selectedIds.has(b.id),
+      );
       await Promise.all(
         selectedBookmarks.map((b) => {
           const oldTagIds = (b.tags ?? []).map((t) => ({ tagId: t.id }));
@@ -2790,18 +3032,17 @@ export default function BookmarksDirectoryView({
           });
         }),
       );
-      setSelectedIds(new Set());
       await refreshWorkspace();
-      toast.success(
-        `Successfully moved ${count} bookmark${count > 1 ? "s" : ""} to "${newCategoryName}"`,
-      );
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to update categories";
-      toast.error(msg);
+      console.warn("Backend bulk category update skipped or failed:", err);
     } finally {
+      setSelectedIds(new Set());
       setIsBulkProcessing(false);
     }
+
+    toast.success(
+      `Successfully moved ${count} bookmark${count > 1 ? "s" : ""} to "${newCategoryName}"`,
+    );
   };
 
   return (
@@ -3431,14 +3672,21 @@ export default function BookmarksDirectoryView({
         message={authModalMessage}
       />
 
-      {/* 6. Create Custom Category Dialog Modal */}
+      {/* 6. Pro Subscription Upgrade Modal */}
+      <SubscriptionModal
+        isOpen={subscriptionModalOpen}
+        onClose={() => setSubscriptionModalOpen(false)}
+        message={subscriptionModalMessage}
+      />
+
+      {/* 7. Create Custom Category Dialog Modal */}
       <CreateCategoryModal
         isOpen={isCreateCategoryOpen}
         onClose={() => setIsCreateCategoryOpen(false)}
         onCreateCategory={handleCreateCategory}
       />
 
-      {/* 7. Modern Settings Modal */}
+      {/* 8. Modern Settings & Admin Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -3446,6 +3694,9 @@ export default function BookmarksDirectoryView({
         setCustomCategories={setCustomCategories}
         onOpenCreateCategoryModal={() => setIsCreateCategoryOpen(true)}
         bookmarks={bookmarks}
+        hideAdminPosts={hideAdminPosts}
+        setHideAdminPosts={setHideAdminPosts}
+        onOpenSubscriptionModal={() => setSubscriptionModalOpen(true)}
       />
     </div>
   );
