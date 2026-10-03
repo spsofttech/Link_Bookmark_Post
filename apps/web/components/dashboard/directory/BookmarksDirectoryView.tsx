@@ -2324,11 +2324,47 @@ export default function BookmarksDirectoryView({
   fetchNextPage?: () => void;
 }) {
   const { theme, setTheme } = useTheme();
-  const [localBookmarks, setLocalBookmarks] = useState<ZBookmark[]>(bookmarks);
+  const applyCategoryOverrides = useCallback(
+    (list: ZBookmark[]): ZBookmark[] => {
+      if (typeof window === "undefined") return list;
+      try {
+        const stored = localStorage.getItem(
+          "karakeep_bookmark_tag_overrides_v1",
+        );
+        if (!stored) return list;
+        const overrides: Record<string, { tag: string; name: string }> =
+          JSON.parse(stored);
+        return list.map((b) => {
+          const ov = overrides[b.id];
+          if (ov) {
+            const newTagObj = {
+              id: `tag-${ov.tag}`,
+              name: ov.tag,
+              attachedBy: "human" as const,
+              userId: b.userId ?? "guest",
+              createdAt: new Date(),
+            };
+            return {
+              ...b,
+              tags: [newTagObj],
+            };
+          }
+          return b;
+        });
+      } catch {
+        return list;
+      }
+    },
+    [],
+  );
+
+  const [localBookmarks, setLocalBookmarks] = useState<ZBookmark[]>(() =>
+    applyCategoryOverrides(bookmarks),
+  );
 
   useEffect(() => {
-    setLocalBookmarks(bookmarks);
-  }, [bookmarks]);
+    setLocalBookmarks(applyCategoryOverrides(bookmarks));
+  }, [bookmarks, applyCategoryOverrides]);
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -3122,7 +3158,24 @@ export default function BookmarksDirectoryView({
       newCategoryTag: string,
       newCategoryName: string,
     ) => {
-      // 1. Optimistic Local State Update
+      // 1. Save override into localStorage so it persists across reloads
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem(
+            "karakeep_bookmark_tag_overrides_v1",
+          );
+          const map = stored ? JSON.parse(stored) : {};
+          map[bookmark.id] = { tag: newCategoryTag, name: newCategoryName };
+          localStorage.setItem(
+            "karakeep_bookmark_tag_overrides_v1",
+            JSON.stringify(map),
+          );
+        } catch {
+          // ignore storage errors
+        }
+      }
+
+      // 2. Optimistic Local State Update
       const newTagObj = {
         id: `tag-${newCategoryTag}`,
         name: newCategoryTag,
@@ -3142,9 +3195,12 @@ export default function BookmarksDirectoryView({
         ),
       );
 
-      // 2. Persist to backend if possible
+      // 3. Persist to backend if possible
       try {
-        const oldTagIds = (bookmark.tags ?? []).map((t) => ({ tagId: t.id }));
+        const oldTagIds = (bookmark.tags ?? []).map((t) => ({
+          tagId: t.id,
+          tagName: t.name,
+        }));
         await updateTagsMutation.mutateAsync({
           bookmarkId: bookmark.id,
           attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
@@ -3175,6 +3231,24 @@ export default function BookmarksDirectoryView({
       userId: "guest",
       createdAt: new Date(),
     };
+
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(
+          "karakeep_bookmark_tag_overrides_v1",
+        );
+        const map = stored ? JSON.parse(stored) : {};
+        for (const id of selectedIds) {
+          map[id] = { tag: newCategoryTag, name: newCategoryName };
+        }
+        localStorage.setItem(
+          "karakeep_bookmark_tag_overrides_v1",
+          JSON.stringify(map),
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }
 
     setLocalBookmarks((prev) =>
       prev.map((b) =>
