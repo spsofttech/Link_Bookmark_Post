@@ -3196,24 +3196,39 @@ export default function BookmarksDirectoryView({
       );
 
       // 3. Persist to backend if possible
+      const oldTagIds = (bookmark.tags ?? [])
+        .map((t) => {
+          const id = typeof t === "object" ? t.id : undefined;
+          const name = typeof t === "string" ? t : t.name;
+          const isValidId = id && !id.startsWith("tag-") && id.length > 5;
+          if (isValidId) {
+            return { tagId: id };
+          }
+          if (name) {
+            return { tagName: name };
+          }
+          return null;
+        })
+        .filter(
+          (t): t is { tagId: string } | { tagName: string } => t !== null,
+        );
+
       try {
-        const oldTagIds = (bookmark.tags ?? []).map((t) => ({
-          tagId: t.id,
-          tagName: t.name,
-        }));
-        await updateTagsMutation.mutateAsync({
-          bookmarkId: bookmark.id,
-          attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
-          detach: oldTagIds,
-        });
-        await refreshWorkspace();
+        if (session && isLoggedIn) {
+          await updateTagsMutation.mutateAsync({
+            bookmarkId: bookmark.id,
+            attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+            detach: oldTagIds,
+          });
+          await refreshWorkspace();
+        }
       } catch (err: unknown) {
-        console.warn("Backend category update skipped or failed:", err);
+        console.info("Backend category update skipped/handled locally:", err);
       }
 
       toast.success(`Moved bookmark to "${newCategoryName}"`);
     },
-    [updateTagsMutation, refreshWorkspace],
+    [updateTagsMutation, refreshWorkspace, session, isLoggedIn],
   );
 
   const handleBulkCategoryChange = async (
@@ -3262,22 +3277,40 @@ export default function BookmarksDirectoryView({
     );
 
     try {
-      const selectedBookmarks = localBookmarks.filter((b) =>
-        selectedIds.has(b.id),
-      );
-      await Promise.all(
-        selectedBookmarks.map((b) => {
-          const oldTagIds = (b.tags ?? []).map((t) => ({ tagId: t.id }));
-          return updateTagsMutation.mutateAsync({
-            bookmarkId: b.id,
-            attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
-            detach: oldTagIds,
-          });
-        }),
-      );
-      await refreshWorkspace();
+      if (session && isLoggedIn) {
+        const selectedBookmarks = localBookmarks.filter((b) =>
+          selectedIds.has(b.id),
+        );
+        await Promise.all(
+          selectedBookmarks.map((b) => {
+            const oldTagIds = (b.tags ?? [])
+              .map((t) => {
+                const tagId = typeof t === "object" ? t.id : undefined;
+                const tagName = typeof t === "string" ? t : t.name;
+                const isValidId =
+                  tagId && !tagId.startsWith("tag-") && tagId.length > 5;
+                if (isValidId) return { tagId };
+                if (tagName) return { tagName };
+                return null;
+              })
+              .filter(
+                (t): t is { tagId: string } | { tagName: string } => t !== null,
+              );
+
+            return updateTagsMutation.mutateAsync({
+              bookmarkId: b.id,
+              attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+              detach: oldTagIds,
+            });
+          }),
+        );
+        await refreshWorkspace();
+      }
     } catch (err: unknown) {
-      console.warn("Backend bulk category update skipped or failed:", err);
+      console.info(
+        "Backend bulk category update skipped/handled locally:",
+        err,
+      );
     } finally {
       setSelectedIds(new Set());
       setIsBulkProcessing(false);
