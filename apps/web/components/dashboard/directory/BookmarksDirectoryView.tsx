@@ -2720,24 +2720,12 @@ export default function BookmarksDirectoryView({
           ""
         ).toLowerCase();
 
-        const matchesTag = tagNames.some(
-          (t) =>
-            t === cTag ||
-            t === cName ||
-            t === cId ||
-            t.includes(cTag) ||
-            t.includes(cName),
-        );
+        const matchesTag =
+          tagNames.includes(cTag) ||
+          tagNames.includes(cName) ||
+          tagNames.includes(cId);
 
-        const matchesText = fullText.includes(cTag) || fullText.includes(cName);
-
-        if (
-          matchesTag ||
-          matchesText ||
-          bCat === cId ||
-          bCat === cTag ||
-          bCat === cName
-        ) {
+        if (matchesTag || bCat === cId || bCat === cTag || bCat === cName) {
           stats[cust.id]++;
         }
       }
@@ -2772,16 +2760,6 @@ export default function BookmarksDirectoryView({
         stats["social-thread"],
         dbMax(["social & thread", "social-thread", "social", "thread"]),
       );
-      for (const cust of customCategories) {
-        stats[cust.id] = Math.max(
-          stats[cust.id] || 0,
-          dbMax([
-            cust.tag.toLowerCase(),
-            cust.name.toLowerCase(),
-            cust.id.toLowerCase(),
-          ]),
-        );
-      }
     }
 
     return stats;
