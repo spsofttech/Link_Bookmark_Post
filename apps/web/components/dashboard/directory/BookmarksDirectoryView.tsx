@@ -2559,10 +2559,24 @@ export default function BookmarksDirectoryView({
         stats["social-thread"]++;
 
       for (const cust of customCategories) {
+        const cTag = cust.tag.toLowerCase();
+        const cName = cust.name.toLowerCase();
+        const cId = cust.id.toLowerCase();
+        const bCat = (
+          (b as unknown as { categoryId?: string; category?: string })
+            .categoryId ||
+          (b as unknown as { categoryId?: string; category?: string })
+            .category ||
+          ""
+        ).toLowerCase();
+
         if (
-          tagNames.includes(cust.tag.toLowerCase()) ||
-          tagNames.includes(cust.name.toLowerCase()) ||
-          fullText.includes(cust.tag.toLowerCase())
+          tagNames.includes(cTag) ||
+          tagNames.includes(cName) ||
+          tagNames.includes(cId) ||
+          bCat === cId ||
+          bCat === cTag ||
+          bCat === cName
         ) {
           stats[cust.id]++;
         }
@@ -2738,14 +2752,23 @@ export default function BookmarksDirectoryView({
       if (customMatch) {
         result = result.filter((b) => {
           const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
-          const title = (getBookmarkTitle(b) ?? "").toLowerCase();
-          const summary = (b.summary ?? b.note ?? "").toLowerCase();
-          const url = (getSourceUrl(b) ?? "").toLowerCase();
-          const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
+          const cTag = customMatch.tag.toLowerCase();
+          const cName = customMatch.name.toLowerCase();
+          const cId = customMatch.id.toLowerCase();
+          const bCat = (
+            (b as unknown as { categoryId?: string; category?: string })
+              .categoryId ||
+            (b as unknown as { categoryId?: string; category?: string })
+              .category ||
+            ""
+          ).toLowerCase();
           return (
-            tagNames.includes(customMatch.tag.toLowerCase()) ||
-            tagNames.includes(customMatch.name.toLowerCase()) ||
-            fullText.includes(customMatch.tag.toLowerCase())
+            tagNames.includes(cTag) ||
+            tagNames.includes(cName) ||
+            tagNames.includes(cId) ||
+            bCat === cId ||
+            bCat === cTag ||
+            bCat === cName
           );
         });
       } else {
