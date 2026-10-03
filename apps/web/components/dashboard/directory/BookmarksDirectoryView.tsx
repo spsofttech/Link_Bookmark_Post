@@ -203,240 +203,6 @@ const DEFAULT_CATEGORY_OPTIONS: CategoryOption[] = [
   },
 ];
 
-// ─── 25 Website Category Posts Seed Helper & Array ───────────────────────────
-function makeWebsiteBookmarkItem(
-  id: string,
-  url: string,
-  title: string,
-  description: string,
-  imageUrl: string,
-  favourited = false,
-): ZBookmark {
-  return {
-    id,
-    createdAt: new Date("2026-01-01T10:00:00Z"),
-    modifiedAt: null,
-    archived: false,
-    favourited,
-    taggingStatus: null,
-    summarizationStatus: null,
-    embeddingStatus: null,
-    userId: "user-1",
-    assets: [],
-    tags: [{ id: "tag-website", name: "Website", attachedBy: "human" }],
-    content: {
-      type: BookmarkTypes.LINK,
-      url,
-      title,
-      description,
-      imageUrl,
-    },
-  };
-}
-
-const WEBSITE_25_POSTS: ZBookmark[] = [
-  makeWebsiteBookmarkItem(
-    "website-post-1",
-    "https://developers.google.com",
-    "Google Developer Portal & Cloud AI Resources",
-    "Build innovative web applications and scale software with Google Cloud, AI SDKs, and developer tools.",
-    "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-2",
-    "https://developer.mozilla.org",
-    "MDN Web Docs - HTML, CSS & JavaScript Reference",
-    "The authoritative web documentation resource for open web standards, modern APIs, and web engineering.",
-    "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-3",
-    "https://github.com",
-    "GitHub - Global Code Hosting & Open Source Hub",
-    "Millions of software engineers and engineering teams host, review, and ship modern software projects on GitHub.",
-    "https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-4",
-    "https://vercel.com",
-    "Vercel - Frontend Cloud Platform & Edge Infrastructure",
-    "Vercel empowers web development teams to deploy fullstack web apps with zero configuration and instant preview deployments.",
-    "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-5",
-    "https://tailwindcss.com",
-    "Tailwind CSS - Modern Utility-First Styling Framework",
-    "A utility-first CSS framework packed with classes that can be composed to build custom web interfaces without writing custom CSS.",
-    "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-6",
-    "https://nextjs.org",
-    "Next.js - Fullstack React Framework for Web Applications",
-    "Created by Vercel, Next.js enables developers to build high-performance React web applications with Server Components.",
-    "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-7",
-    "https://stripe.com",
-    "Stripe - Digital Payment Infrastructure & APIs",
-    "Millions of global businesses use Stripe online APIs to process payments, manage subscriptions, and send payouts.",
-    "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-8",
-    "https://figma.com",
-    "Figma - Collaborative Design & Interactive Prototyping",
-    "Figma connects product designers and web developers in a unified cloud workplace to turn ideas into interactive products.",
-    "https://images.unsplash.com/photo-1581291518633-83b4ebd1d83e?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-9",
-    "https://supabase.com",
-    "Supabase - Open Source Firebase & PostgreSQL Engine",
-    "Supabase provides Postgres database hosting, instant GraphQL and REST APIs, Authentication, and Storage for modern web projects.",
-    "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-10",
-    "https://openai.com",
-    "OpenAI Platform & Frontier AI Intelligence",
-    "Creating safe and beneficial artificial general intelligence with breakthrough GPT foundation models and API tooling.",
-    "https://images.unsplash.com/photo-1677442136019-21780efad99a?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-11",
-    "https://anthropic.com",
-    "Anthropic - Claude AI Assistant & Frontier Model Research",
-    "Building trustworthy AI systems focused on safety, constitutional principles, and advanced reasoning capabilities.",
-    "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-12",
-    "https://typescriptlang.org",
-    "TypeScript - Strongly Typed Programming Language",
-    "TypeScript extends JavaScript by adding static type definitions to improve developer tooling and prevent runtime bugs.",
-    "https://images.unsplash.com/photo-1516116211223-4c71414e2c84?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-13",
-    "https://react.dev",
-    "React - The Library for Web & Native User Interfaces",
-    "Learn React and build web user interfaces out of composable components with reactive state management.",
-    "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-14",
-    "https://stackoverflow.com",
-    "Stack Overflow - Developer Knowledge Sharing Platform",
-    "Empowering developers around the globe to solve technical questions and share programming expertise.",
-    "https://images.unsplash.com/photo-1579389083078-4e7018379f7e?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-15",
-    "https://orm.drizzle.team",
-    "Drizzle ORM - Type-Safe SQL ORM & Migrations",
-    "Drizzle ORM is a lightweight, type-safe TypeScript ORM that runs in Node.js, Cloudflare Workers, and serverless environments.",
-    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-16",
-    "https://hono.dev",
-    "Hono - Ultrafast Web Framework for Edge Runtimes",
-    "Hono is a lightweight, blazing fast web framework designed for Cloudflare Workers, Deno, Bun, and Node.js.",
-    "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-17",
-    "https://turbo.build",
-    "Turborepo - High Performance Monorepo Build Tool",
-    "Turborepo optimizes build caching and task pipelines for large-scale JavaScript and TypeScript monorepos.",
-    "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-18",
-    "https://vitest.dev",
-    "Vitest - Next Generation Unit Testing Framework",
-    "Vitest provides ultra-fast unit testing powered by Vite with native ESM support and jest-compatible APIs.",
-    "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-19",
-    "https://docker.com",
-    "Docker - Containerization & Cloud Application Tooling",
-    "Develop, package, and deploy containerized applications reliably across development and production environments.",
-    "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-20",
-    "https://producthunt.com",
-    "Product Hunt - The Best New Tech Products & Websites",
-    "Product Hunt surfaces trending tech apps, SaaS websites, and innovative developer tools daily.",
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-21",
-    "https://news.ycombinator.com",
-    "Hacker News - Y Combinator Tech Discussions & Links",
-    "Hacker News is a community web feed sharing technology news, startups, computer science, and software engineering.",
-    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-22",
-    "https://dev.to",
-    "DEV Community - Software Developers Social Platform",
-    "A collaborative social platform for developers to write technical guides, tutorials, and career advice.",
-    "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-23",
-    "https://medium.com",
-    "Medium - Tech Publications & Longform Writing",
-    "Medium is an open publishing platform where engineering teams and writers share insightful tech knowledge.",
-    "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800&auto=format&fit=crop&q=80",
-    false,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-24",
-    "https://substack.com",
-    "Substack - Independent Newsletters & Media",
-    "Substack empowers creators to publish digital newsletters and build direct audience subscriptions.",
-    "https://images.unsplash.com/photo-1512486130939-2c4f79935e4f?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-  makeWebsiteBookmarkItem(
-    "website-post-25",
-    "https://docusaurus.io",
-    "Docusaurus - Modern Open Source Static Documentation Site Generator",
-    "Build optimized documentation websites quickly with React and Markdown powered by Docusaurus.",
-    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800&auto=format&fit=crop&q=80",
-    true,
-  ),
-];
-
 // ─── Reusable Copy Button ───────────────────────────────────────────────────
 function CopyButton({
   text,
@@ -2745,7 +2511,7 @@ export default function BookmarksDirectoryView({
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = {
       all: localBookmarks.length,
-      website: 25,
+      website: 0,
       skills: 0,
       agents: 0,
       commands: 0,
@@ -2757,15 +2523,7 @@ export default function BookmarksDirectoryView({
     };
 
     for (const cust of customCategories) {
-      if (
-        cust.name.toLowerCase() === "website" ||
-        cust.tag.toLowerCase() === "website" ||
-        cust.id.toLowerCase() === "website"
-      ) {
-        stats[cust.id] = 25;
-      } else {
-        stats[cust.id] = 0;
-      }
+      stats[cust.id] = 0;
     }
 
     for (const b of localBookmarks) {
@@ -2775,6 +2533,13 @@ export default function BookmarksDirectoryView({
       const url = (getSourceUrl(b) ?? "").toLowerCase();
       const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
+      if (
+        tagNames.includes("website") ||
+        tagNames.includes("web") ||
+        tagNames.includes("sites") ||
+        fullText.includes("website")
+      )
+        stats.website++;
       if (tagNames.includes("skills") || fullText.includes("skill"))
         stats.skills++;
       if (tagNames.includes("agents") || fullText.includes("agent"))
@@ -2842,7 +2607,10 @@ export default function BookmarksDirectoryView({
       const dbMax = (keys: string[]) =>
         keys.reduce((acc, k) => acc + (dbTagMap.get(k) ?? 0), 0);
 
-      stats.website = 25;
+      stats.website = Math.max(
+        stats.website,
+        dbMax(["website", "web", "sites"]),
+      );
       stats.skills = Math.max(stats.skills, dbMax(["skills", "skill"]));
       stats.agents = Math.max(stats.agents, dbMax(["agents", "agent"]));
       stats.commands = Math.max(stats.commands, dbMax(["commands", "command"]));
@@ -2864,18 +2632,10 @@ export default function BookmarksDirectoryView({
         dbMax(["social & thread", "social-thread", "social", "thread"]),
       );
       for (const cust of customCategories) {
-        if (
-          cust.name.toLowerCase() === "website" ||
-          cust.tag.toLowerCase() === "website" ||
-          cust.id.toLowerCase() === "website"
-        ) {
-          stats[cust.id] = 25;
-        } else {
-          stats[cust.id] = Math.max(
-            stats[cust.id] || 0,
-            dbMax([cust.tag.toLowerCase(), cust.name.toLowerCase()]),
-          );
-        }
+        stats[cust.id] = Math.max(
+          stats[cust.id] || 0,
+          dbMax([cust.tag.toLowerCase(), cust.name.toLowerCase()]),
+        );
       }
     }
 
@@ -2887,7 +2647,7 @@ export default function BookmarksDirectoryView({
       {
         id: "website",
         name: "Website",
-        count: categoryStats.website || 25,
+        count: categoryStats.website,
         icon: <Globe className="size-4 text-emerald-500" />,
         iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-500",
         description:
@@ -3016,40 +2776,30 @@ export default function BookmarksDirectoryView({
       });
     }
 
-    if (activeCategory === "website") {
-      result = WEBSITE_25_POSTS;
-    } else if (activeCategory !== "all") {
+    if (activeCategory !== "all") {
       const customMatch = customCategories.find((c) => c.id === activeCategory);
       if (customMatch) {
-        if (
-          customMatch.name.toLowerCase() === "website" ||
-          customMatch.tag.toLowerCase() === "website" ||
-          customMatch.id.toLowerCase() === "website"
-        ) {
-          result = WEBSITE_25_POSTS;
-        } else {
-          result = result.filter((b) => {
-            const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
-            const cTag = customMatch.tag.toLowerCase();
-            const cName = customMatch.name.toLowerCase();
-            const cId = customMatch.id.toLowerCase();
-            const bCat = (
-              (b as unknown as { categoryId?: string; category?: string })
-                .categoryId ||
-              (b as unknown as { categoryId?: string; category?: string })
-                .category ||
-              ""
-            ).toLowerCase();
-            return (
-              tagNames.includes(cTag) ||
-              tagNames.includes(cName) ||
-              tagNames.includes(cId) ||
-              bCat === cId ||
-              bCat === cTag ||
-              bCat === cName
-            );
-          });
-        }
+        result = result.filter((b) => {
+          const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
+          const cTag = customMatch.tag.toLowerCase();
+          const cName = customMatch.name.toLowerCase();
+          const cId = customMatch.id.toLowerCase();
+          const bCat = (
+            (b as unknown as { categoryId?: string; category?: string })
+              .categoryId ||
+            (b as unknown as { categoryId?: string; category?: string })
+              .category ||
+            ""
+          ).toLowerCase();
+          return (
+            tagNames.includes(cTag) ||
+            tagNames.includes(cName) ||
+            tagNames.includes(cId) ||
+            bCat === cId ||
+            bCat === cTag ||
+            bCat === cName
+          );
+        });
       } else {
         result = result.filter((b) => {
           const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
@@ -3058,7 +2808,13 @@ export default function BookmarksDirectoryView({
           const url = (getSourceUrl(b) ?? "").toLowerCase();
           const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
-          if (activeCategory === "website") return true;
+          if (activeCategory === "website")
+            return (
+              tagNames.includes("website") ||
+              tagNames.includes("web") ||
+              tagNames.includes("sites") ||
+              fullText.includes("website")
+            );
           if (activeCategory === "skills")
             return tagNames.includes("skills") || fullText.includes("skill");
           if (activeCategory === "agents")
