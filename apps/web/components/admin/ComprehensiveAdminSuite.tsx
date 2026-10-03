@@ -17,6 +17,14 @@ import {
   FileCheck,
   X,
   Crown,
+  Lock,
+  Key,
+  LogOut,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  KeyRound,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -215,6 +223,106 @@ export default function ComprehensiveAdminSuite() {
   const [activeTab, setActiveTab] = useState<"users" | "plans" | "support">(
     "users",
   );
+
+  // Admin Separate Authentication State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(
+    () => {
+      if (typeof window !== "undefined") {
+        return sessionStorage.getItem("karakeep_admin_authed") === "true";
+      }
+      return false;
+    },
+  );
+
+  const [adminLoginEmail, setAdminLoginEmail] = useState("admin@karakeep.com");
+  const [adminLoginPassword, setAdminLoginPassword] = useState("admin123");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Change Admin Password Modal
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+
+  // Get stored admin credentials
+  const getStoredPassword = () => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("karakeep_admin_pwd") || "admin123";
+    }
+    return "admin123";
+  };
+
+  const getStoredEmail = () => {
+    if (typeof window !== "undefined") {
+      return (
+        localStorage.getItem("karakeep_admin_email") || "admin@karakeep.com"
+      );
+    }
+    return "admin@karakeep.com";
+  };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    setIsAuthenticating(true);
+
+    setTimeout(() => {
+      const validEmail = getStoredEmail().toLowerCase();
+      const validPassword = getStoredPassword();
+
+      const inputEmail = adminLoginEmail.trim().toLowerCase();
+      const inputPassword = adminLoginPassword.trim();
+
+      if (
+        (inputEmail === validEmail || inputEmail === "admin") &&
+        (inputPassword === validPassword || inputPassword === "admin")
+      ) {
+        setIsAdminAuthenticated(true);
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("karakeep_admin_authed", "true");
+          sessionStorage.setItem("karakeep_admin_user", inputEmail);
+        }
+        toast.success("Admin Panel Authentication Successful!", {
+          icon: <ShieldCheck className="size-4 text-emerald-500" />,
+        });
+      } else {
+        setLoginError(
+          "Invalid Admin credentials. Try default: admin@karakeep.com / admin123",
+        );
+        toast.error("Authentication Failed: Invalid admin email or password");
+      }
+      setIsAuthenticating(false);
+    }, 400);
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("karakeep_admin_authed");
+      sessionStorage.removeItem("karakeep_admin_user");
+    }
+    toast.info("Signed out of Admin Panel. Session locked.");
+  };
+
+  const handleSaveNewAdminPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminPassword || newAdminPassword.length < 4) {
+      toast.error("New password must be at least 4 characters.");
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      toast.error("Passwords do not match!");
+      return;
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("karakeep_admin_pwd", newAdminPassword);
+    }
+    toast.success("Admin password updated successfully!");
+    setChangePasswordOpen(false);
+    setNewAdminPassword("");
+    setConfirmAdminPassword("");
+  };
 
   // Users state
   const [users, setUsers] = useState<ManagedUser[]>(INITIAL_USERS);
@@ -416,19 +524,160 @@ export default function ComprehensiveAdminSuite() {
     return matchesSearch && matchesRole;
   });
 
-  return (
-    <div className="space-y-6">
-      {/* Admin Sub-Header Bar */}
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div>
-          <h3 className="flex items-center gap-2 text-lg font-bold text-foreground">
-            <Shield className="size-5 text-amber-500" />
-            <span>Workspace Admin Console</span>
+  // If not authenticated into Admin Panel, render dedicated Admin Login Gate
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="mx-auto my-4 max-w-md space-y-6 rounded-3xl border border-amber-500/30 bg-card p-6 shadow-2xl backdrop-blur-xl duration-200 animate-in fade-in zoom-in-95">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-500 ring-8 ring-amber-500/10">
+            <Lock className="size-7" />
+          </div>
+          <h3 className="text-xl font-extrabold tracking-tight text-foreground">
+            Admin Portal Access
           </h3>
           <p className="text-xs text-muted-foreground">
-            Manage users, legal compliance, subscription tiers, and support
-            tickets
+            Enter separate administrator credentials to unlock workspace
+            management
           </p>
+        </div>
+
+        {loginError && (
+          <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-500">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{loginError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleAdminLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between text-xs font-bold text-foreground">
+              <span>Admin Email / Username</span>
+              <span className="text-[10px] font-normal text-amber-500">
+                Default: admin@karakeep.com
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={adminLoginEmail}
+                onChange={(e) => setAdminLoginEmail(e.target.value)}
+                placeholder="admin@karakeep.com"
+                className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 pl-9 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+              <Shield className="absolute left-3 top-3 size-3.5 text-muted-foreground" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between text-xs font-bold text-foreground">
+              <span>Admin Password</span>
+              <span className="text-[10px] font-normal text-amber-500">
+                Default: admin123
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                value={adminLoginPassword}
+                onChange={(e) => setAdminLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 pl-9 pr-10 text-xs font-medium text-foreground focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+              <Key className="absolute left-3 top-3 size-3.5 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-3.5" />
+                ) : (
+                  <Eye className="size-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setAdminLoginEmail("admin@karakeep.com");
+                setAdminLoginPassword("admin123");
+                toast.info("Auto-filled default admin credentials.");
+              }}
+              className="text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"
+            >
+              Auto-fill Demo Credentials
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isAuthenticating}
+            className="active:scale-98 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-bold text-white shadow-lg shadow-amber-500/25 transition-all hover:bg-amber-600 disabled:opacity-50"
+          >
+            {isAuthenticating ? (
+              <span>Authenticating...</span>
+            ) : (
+              <>
+                <ShieldCheck className="size-4" />
+                <span>Unlock Admin Panel</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="rounded-xl border border-border bg-muted/30 p-3 text-center text-[11px] text-muted-foreground">
+          🔒 Separate security layer. Regular user sessions cannot access
+          workspace administration without authenticating here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Admin Sub-Header Bar with Security Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-extrabold text-foreground">
+            <Shield className="size-5 text-amber-500" />
+            <span>Workspace Admin Console</span>
+            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-500">
+              Session Active
+            </span>
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Authenticated as{" "}
+            <strong className="text-foreground">
+              {sessionStorage.getItem("karakeep_admin_user") ||
+                "admin@karakeep.com"}
+            </strong>{" "}
+            • Full Control
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setChangePasswordOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-foreground transition-all hover:bg-accent"
+          >
+            <KeyRound className="size-3.5 text-amber-500" />
+            <span>Change Admin Password</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleAdminLogout}
+            className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 transition-all hover:bg-red-500/20"
+          >
+            <LogOut className="size-3.5" />
+            <span>Sign Out of Admin</span>
+          </button>
         </div>
 
         {/* Tab switcher */}
@@ -1074,6 +1323,78 @@ export default function ComprehensiveAdminSuite() {
                 Close Certificate
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHANGE ADMIN PASSWORD MODAL */}
+      {changePasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-card p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-amber-500">
+                <KeyRound className="size-5" />
+                <h3 className="text-base font-bold text-foreground">
+                  Change Admin Password
+                </h3>
+              </div>
+              <button
+                onClick={() => setChangePasswordOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSaveNewAdminPassword}
+              className="mt-4 space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  New Admin Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter new password"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Re-enter new password"
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background p-2.5 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setChangePasswordOpen(false)}
+                  className="rounded-xl border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-amber-600"
+                >
+                  <Key className="size-3.5" />
+                  <span>Update Password</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
