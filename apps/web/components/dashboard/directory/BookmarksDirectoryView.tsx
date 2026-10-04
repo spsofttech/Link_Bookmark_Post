@@ -245,32 +245,115 @@ function CopyButton({
   );
 }
 
-// ─── Unified Category & Tag Helper Functions ────────────────────────────────
+// ─── Unified Tag & Category Normalization Engine ───────────────────────────
+function normalizeTagName(raw: string): string {
+  if (!raw || typeof raw !== "string") return "";
+  let clean = raw.trim().toLowerCase();
+  if (!clean) return "";
+
+  // 1. Remove trailing / other, /other, -other, / general, etc.
+  clean = clean
+    .replace(/\s*[/-]\s*(other|general|misc|uncategorized)$/i, "")
+    .replace(/^(other|general|misc|uncategorized)\s*[/-]\s*/i, "");
+
+  // 2. Remove compound trailing plus sections (e.g. "marketing & branding + personal goals" -> "marketing & branding")
+  if (clean.includes(" + ")) {
+    clean = clean.split(" + ")[0].trim();
+  }
+
+  return clean;
+}
+
+function cleanAndDeduplicateCategories(
+  list: CustomCategory[],
+): CustomCategory[] {
+  const result: CustomCategory[] = [];
+  const seenIds = new Set<string>();
+
+  const defaultCategoryNormalizedNames = new Set([
+    "all",
+    "skills",
+    "skill",
+    "agents",
+    "agent",
+    "commands",
+    "command",
+    "share-image",
+    "share image",
+    "image",
+    "code-tech",
+    "code & tech",
+    "code",
+    "tech",
+    "video",
+    "article-blog",
+    "article & blog",
+    "article",
+    "blog",
+    "social-thread",
+    "social & thread",
+    "social",
+    "thread",
+  ]);
+
+  for (const c of list) {
+    const normTag = normalizeTagName(c.tag || c.name || c.id);
+    if (!normTag || defaultCategoryNormalizedNames.has(normTag)) continue;
+
+    const id = normTag.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (!id || seenIds.has(id)) continue;
+
+    seenIds.add(id);
+
+    const displayName = normTag
+      .split(" ")
+      .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : ""))
+      .join(" ");
+
+    result.push({
+      id,
+      name: displayName,
+      tag: normTag,
+      description: c.description || `Category: ${displayName}`,
+    });
+  }
+
+  return result;
+}
+
 function getBookmarkTagNames(b: unknown): string[] {
   if (!b || typeof b !== "object") return [];
   const obj = b as Record<string, unknown>;
   const tags = obj.tags;
   if (!Array.isArray(tags)) return [];
 
-  const result: string[] = [];
+  const rawTags: string[] = [];
   for (const t of tags) {
     if (!t) continue;
+    let rawTag = "";
     if (typeof t === "string") {
-      if (t.trim()) result.push(t.trim().toLowerCase());
+      rawTag = t;
     } else if (typeof t === "object") {
       const tagObj = t as Record<string, unknown>;
       const nestedTag = tagObj.tag as Record<string, unknown> | undefined;
-      const tagName =
+      rawTag =
         (nestedTag?.name as string) ||
         (tagObj.name as string) ||
         (tagObj.tagName as string) ||
-        (tagObj.label as string);
-      if (tagName && String(tagName).trim()) {
-        result.push(String(tagName).trim().toLowerCase());
+        (tagObj.label as string) ||
+        "";
+    }
+
+    if (rawTag && rawTag.trim()) {
+      const norm = normalizeTagName(rawTag);
+      if (norm) rawTags.push(norm);
+      const lowerRaw = rawTag.trim().toLowerCase();
+      if (lowerRaw && lowerRaw !== norm) {
+        rawTags.push(lowerRaw);
       }
     }
   }
-  return result;
+  return Array.from(new Set(rawTags));
 }
 
 function isBookmarkInCategory(
@@ -283,6 +366,7 @@ function isBookmarkInCategory(
 
   const bObj = b as Record<string, unknown>;
   const tagNames = getBookmarkTagNames(b);
+
   const title = String(
     (bObj.title as string) ||
       ((bObj.content as Record<string, unknown>)?.title as string) ||
@@ -296,7 +380,9 @@ function isBookmarkInCategory(
       "",
   ).toLowerCase();
   const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
-  const bCat = String(bObj.categoryId || bObj.category || "").toLowerCase();
+
+  const rawCat = String(bObj.categoryId || bObj.category || "").toLowerCase();
+  const normCat = normalizeTagName(rawCat);
 
   // 1. Check custom category definitions
   const customMatch = customCategories.find((c) => c.id === categoryId);
@@ -309,9 +395,12 @@ function isBookmarkInCategory(
       tagNames.includes(cTag) ||
       tagNames.includes(cName) ||
       tagNames.includes(cId) ||
-      bCat === cId ||
-      bCat === cTag ||
-      bCat === cName
+      normCat === cId ||
+      normCat === cTag ||
+      normCat === cName ||
+      rawCat === cId ||
+      rawCat === cTag ||
+      rawCat === cName
     );
   }
 
@@ -374,7 +463,11 @@ function isBookmarkInCategory(
       );
     default: {
       const normCatId = categoryId.toLowerCase();
-      return tagNames.includes(normCatId) || bCat === normCatId;
+      return (
+        tagNames.includes(normCatId) ||
+        normCat === normCatId ||
+        rawCat === normCatId
+      );
     }
   }
 }
@@ -2510,7 +2603,12 @@ export default function BookmarksDirectoryView({
       if (typeof window !== "undefined") {
         try {
           const stored = localStorage.getItem("karakeep_custom_categories_v1");
-          if (stored) return JSON.parse(stored);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              return cleanAndDeduplicateCategories(parsed);
+            }
+          }
         } catch {
           // ignore storage errors
         }
@@ -2767,69 +2865,46 @@ export default function BookmarksDirectoryView({
     if (allTagNames.size === 0) return;
 
     setCustomCategories((prev) => {
-      let changed = false;
-      const updated = [...prev];
-
-      const defaultCategoryNormalizedNames = new Set([
-        "all",
-        "skills",
-        "skill",
-        "agents",
-        "agent",
-        "commands",
-        "command",
-        "share-image",
-        "share image",
-        "image",
-        "code-tech",
-        "code & tech",
-        "code",
-        "tech",
-        "video",
-        "article-blog",
-        "article & blog",
-        "article",
-        "blog",
-        "social-thread",
-        "social & thread",
-        "social",
-        "thread",
-      ]);
+      const rawList: CustomCategory[] = [...prev];
 
       for (const rawName of allTagNames) {
-        const normName = rawName.toLowerCase();
-        if (defaultCategoryNormalizedNames.has(normName)) continue;
+        const normTag = normalizeTagName(rawName);
+        if (!normTag) continue;
 
-        const id = normName.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const id = normTag.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
         if (!id) continue;
 
-        const alreadyExists = updated.some(
-          (c) => c.id === id || c.name.toLowerCase() === normName,
-        );
+        const displayName = normTag
+          .split(" ")
+          .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : ""))
+          .join(" ");
 
-        if (!alreadyExists) {
-          updated.push({
-            id,
-            name: rawName,
-            tag: normName,
-            description: `Category: ${rawName}`,
-          });
-          changed = true;
-        }
+        rawList.push({
+          id,
+          name: displayName,
+          tag: normTag,
+          description: `Category: ${displayName}`,
+        });
       }
 
-      if (changed && typeof window !== "undefined") {
+      const deduplicated = cleanAndDeduplicateCategories(rawList);
+
+      const isDifferent =
+        deduplicated.length !== prev.length ||
+        deduplicated.some((c, i) => c.id !== prev[i]?.id);
+
+      if (isDifferent && typeof window !== "undefined") {
         try {
           localStorage.setItem(
             "karakeep_custom_categories_v1",
-            JSON.stringify(updated),
+            JSON.stringify(deduplicated),
           );
         } catch {
           // ignore storage errors
         }
       }
 
-      return changed ? updated : prev;
+      return isDifferent ? deduplicated : prev;
     });
   }, [dbTagsData, dbCounts, localBookmarks]);
 
@@ -2979,14 +3054,18 @@ export default function BookmarksDirectoryView({
       );
 
       for (const cust of customCategories) {
-        const cKeys = Array.from(
-          new Set([
-            cust.id.toLowerCase(),
-            cust.name.toLowerCase(),
-            cust.tag.toLowerCase(),
-          ]),
-        );
-        const countFromDb = dbMax(cKeys);
+        const cNorm = cust.tag.toLowerCase();
+        let countFromDb = 0;
+        for (const { tagName, count } of dbCounts.perTag) {
+          const tNorm = normalizeTagName(tagName);
+          if (
+            tNorm === cNorm ||
+            tNorm === cust.id.toLowerCase() ||
+            tNorm === cust.name.toLowerCase()
+          ) {
+            countFromDb += count;
+          }
+        }
         stats[cust.id] = Math.max(stats[cust.id] || 0, countFromDb);
       }
     }
