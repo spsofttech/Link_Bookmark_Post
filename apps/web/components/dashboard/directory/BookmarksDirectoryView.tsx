@@ -245,6 +245,140 @@ function CopyButton({
   );
 }
 
+// ─── Unified Category & Tag Helper Functions ────────────────────────────────
+function getBookmarkTagNames(b: unknown): string[] {
+  if (!b || typeof b !== "object") return [];
+  const obj = b as Record<string, unknown>;
+  const tags = obj.tags;
+  if (!Array.isArray(tags)) return [];
+
+  const result: string[] = [];
+  for (const t of tags) {
+    if (!t) continue;
+    if (typeof t === "string") {
+      if (t.trim()) result.push(t.trim().toLowerCase());
+    } else if (typeof t === "object") {
+      const tagObj = t as Record<string, unknown>;
+      const nestedTag = tagObj.tag as Record<string, unknown> | undefined;
+      const tagName =
+        (nestedTag?.name as string) ||
+        (tagObj.name as string) ||
+        (tagObj.tagName as string) ||
+        (tagObj.label as string);
+      if (tagName && String(tagName).trim()) {
+        result.push(String(tagName).trim().toLowerCase());
+      }
+    }
+  }
+  return result;
+}
+
+function isBookmarkInCategory(
+  b: unknown,
+  categoryId: string,
+  customCategories: CustomCategory[] = [],
+): boolean {
+  if (!b || typeof b !== "object") return false;
+  if (categoryId === "all") return true;
+
+  const bObj = b as Record<string, unknown>;
+  const tagNames = getBookmarkTagNames(b);
+  const title = String(
+    (bObj.title as string) ||
+      ((bObj.content as Record<string, unknown>)?.title as string) ||
+      "",
+  ).toLowerCase();
+  const summary = String(bObj.summary || bObj.note || "").toLowerCase();
+  const url = String(
+    (bObj.url as string) ||
+      ((bObj.content as Record<string, unknown>)?.url as string) ||
+      ((bObj.content as Record<string, unknown>)?.sourceUrl as string) ||
+      "",
+  ).toLowerCase();
+  const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
+  const bCat = String(bObj.categoryId || bObj.category || "").toLowerCase();
+
+  // 1. Check custom category definitions
+  const customMatch = customCategories.find((c) => c.id === categoryId);
+  if (customMatch) {
+    const cTag = customMatch.tag.toLowerCase();
+    const cName = customMatch.name.toLowerCase();
+    const cId = customMatch.id.toLowerCase();
+
+    return (
+      tagNames.includes(cTag) ||
+      tagNames.includes(cName) ||
+      tagNames.includes(cId) ||
+      bCat === cId ||
+      bCat === cTag ||
+      bCat === cName
+    );
+  }
+
+  // 2. Default built-in categories
+  switch (categoryId) {
+    case "skills":
+      return (
+        tagNames.includes("skills") ||
+        tagNames.includes("skill") ||
+        fullText.includes("skill")
+      );
+    case "agents":
+      return (
+        tagNames.includes("agents") ||
+        tagNames.includes("agent") ||
+        fullText.includes("agent")
+      );
+    case "commands":
+      return (
+        tagNames.includes("commands") ||
+        tagNames.includes("command") ||
+        fullText.includes("command")
+      );
+    case "share-image":
+      return (
+        tagNames.includes("share image") ||
+        tagNames.includes("share-image") ||
+        tagNames.includes("image") ||
+        (bObj.content as Record<string, unknown> | undefined)?.type ===
+          BookmarkTypes.ASSET ||
+        /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
+      );
+    case "code-tech":
+      return (
+        tagNames.includes("code & tech") ||
+        tagNames.includes("code-tech") ||
+        tagNames.includes("code") ||
+        /(github|stack|dev\.to|npm|code)/i.test(fullText)
+      );
+    case "video":
+      return (
+        tagNames.includes("video") ||
+        /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
+      );
+    case "article-blog":
+      return (
+        tagNames.includes("article & blog") ||
+        tagNames.includes("article-blog") ||
+        tagNames.includes("article") ||
+        tagNames.includes("blog") ||
+        /(medium|substack|blog|article)/i.test(fullText)
+      );
+    case "social-thread":
+      return (
+        tagNames.includes("social & thread") ||
+        tagNames.includes("social-thread") ||
+        tagNames.includes("social") ||
+        tagNames.includes("thread") ||
+        /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
+      );
+    default: {
+      const normCatId = categoryId.toLowerCase();
+      return tagNames.includes(normCatId) || bCat === normCatId;
+    }
+  }
+}
+
 // ─── Create Category Dialog Modal ──────────────────────────────────────────
 /* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */
 function CreateCategoryModal({
@@ -2624,11 +2758,8 @@ export default function BookmarksDirectoryView({
 
     if (localBookmarks) {
       for (const b of localBookmarks) {
-        if (b.tags) {
-          for (const t of b.tags) {
-            const tagName = typeof t === "string" ? t : t?.name;
-            if (tagName?.trim()) allTagNames.add(tagName.trim());
-          }
+        for (const tagName of getBookmarkTagNames(b)) {
+          if (tagName?.trim()) allTagNames.add(tagName.trim());
         }
       }
     }
@@ -2796,113 +2927,22 @@ export default function BookmarksDirectoryView({
     }
 
     for (const b of localBookmarks) {
-      const tagNames: string[] = ((b.tags as unknown[]) ?? [])
-        .map((t: unknown): string => {
-          if (typeof t === "string") return t.toLowerCase();
-          if (typeof t === "object" && t !== null) {
-            const obj = t as Record<string, unknown>;
-            return String(
-              obj.name || obj.tagName || obj.label || "",
-            ).toLowerCase();
-          }
-          return "";
-        })
-        .filter(Boolean);
-
-      const title = (getBookmarkTitle(b) ?? "").toLowerCase();
-      const summary = (b.summary ?? b.note ?? "").toLowerCase();
-      const url = (getSourceUrl(b) ?? "").toLowerCase();
-      const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
-
-      if (
-        tagNames.some((t) => t.includes("skill")) ||
-        fullText.includes("skill")
-      )
-        stats.skills++;
-      if (
-        tagNames.some((t) => t.includes("agent")) ||
-        fullText.includes("agent")
-      )
-        stats.agents++;
-      if (
-        tagNames.some((t) => t.includes("command")) ||
-        fullText.includes("command")
-      )
+      if (isBookmarkInCategory(b, "skills", customCategories)) stats.skills++;
+      if (isBookmarkInCategory(b, "agents", customCategories)) stats.agents++;
+      if (isBookmarkInCategory(b, "commands", customCategories))
         stats.commands++;
-      if (
-        tagNames.some(
-          (t) =>
-            t.includes("share image") ||
-            t.includes("share-image") ||
-            t.includes("image"),
-        ) ||
-        b.content.type === BookmarkTypes.ASSET ||
-        /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
-      )
+      if (isBookmarkInCategory(b, "share-image", customCategories))
         stats["share-image"]++;
-      if (
-        tagNames.some(
-          (t) =>
-            t.includes("code & tech") ||
-            t.includes("code-tech") ||
-            t.includes("code"),
-        ) ||
-        /(github|stack|dev\.to|npm|code)/i.test(fullText)
-      )
+      if (isBookmarkInCategory(b, "code-tech", customCategories))
         stats["code-tech"]++;
-      if (
-        tagNames.some((t) => t.includes("video")) ||
-        /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
-      )
-        stats.video++;
-      if (
-        tagNames.some(
-          (t) =>
-            t.includes("article & blog") ||
-            t.includes("article-blog") ||
-            t.includes("article") ||
-            t.includes("blog"),
-        ) ||
-        /(medium|substack|blog|article)/i.test(fullText)
-      )
+      if (isBookmarkInCategory(b, "video", customCategories)) stats.video++;
+      if (isBookmarkInCategory(b, "article-blog", customCategories))
         stats["article-blog"]++;
-      if (
-        tagNames.some(
-          (t) =>
-            t.includes("social & thread") ||
-            t.includes("social-thread") ||
-            t.includes("social") ||
-            t.includes("thread"),
-        ) ||
-        /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
-      )
+      if (isBookmarkInCategory(b, "social-thread", customCategories))
         stats["social-thread"]++;
 
       for (const cust of customCategories) {
-        const cTag = cust.tag.toLowerCase();
-        const cName = cust.name.toLowerCase();
-        const cId = cust.id.toLowerCase();
-        const bCat = (
-          (b as unknown as { categoryId?: string; category?: string })
-            .categoryId ||
-          (b as unknown as { categoryId?: string; category?: string })
-            .category ||
-          ""
-        ).toLowerCase();
-
-        const matchesTag =
-          tagNames.includes(cTag) ||
-          tagNames.includes(cName) ||
-          tagNames.includes(cId) ||
-          tagNames.some(
-            (t) =>
-              t === cTag ||
-              t === cName ||
-              t.includes(cTag) ||
-              t.includes(cName),
-          );
-
-        if (matchesTag || bCat === cId || bCat === cTag || bCat === cName) {
+        if (isBookmarkInCategory(b, cust.id, customCategories)) {
           stats[cust.id]++;
         }
       }
@@ -2939,11 +2979,13 @@ export default function BookmarksDirectoryView({
       );
 
       for (const cust of customCategories) {
-        const cKeys = [
-          cust.id,
-          cust.name.toLowerCase(),
-          cust.tag.toLowerCase(),
-        ];
+        const cKeys = Array.from(
+          new Set([
+            cust.id.toLowerCase(),
+            cust.name.toLowerCase(),
+            cust.tag.toLowerCase(),
+          ]),
+        );
         const countFromDb = dbMax(cKeys);
         stats[cust.id] = Math.max(stats[cust.id] || 0, countFromDb);
       }
@@ -3081,74 +3123,9 @@ export default function BookmarksDirectoryView({
     }
 
     if (activeCategory !== "all") {
-      const customMatch = customCategories.find((c) => c.id === activeCategory);
-      if (customMatch) {
-        result = result.filter((b) => {
-          const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
-          const cTag = customMatch.tag.toLowerCase();
-          const cName = customMatch.name.toLowerCase();
-          const cId = customMatch.id.toLowerCase();
-          const bCat = (
-            (b as unknown as { categoryId?: string; category?: string })
-              .categoryId ||
-            (b as unknown as { categoryId?: string; category?: string })
-              .category ||
-            ""
-          ).toLowerCase();
-          return (
-            tagNames.includes(cTag) ||
-            tagNames.includes(cName) ||
-            tagNames.includes(cId) ||
-            bCat === cId ||
-            bCat === cTag ||
-            bCat === cName
-          );
-        });
-      } else {
-        result = result.filter((b) => {
-          const tagNames = b.tags?.map((t) => t.name.toLowerCase()) ?? [];
-          const title = (getBookmarkTitle(b) ?? "").toLowerCase();
-          const summary = (b.summary ?? b.note ?? "").toLowerCase();
-          const url = (getSourceUrl(b) ?? "").toLowerCase();
-          const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
-
-          if (activeCategory === "skills")
-            return tagNames.includes("skills") || fullText.includes("skill");
-          if (activeCategory === "agents")
-            return tagNames.includes("agents") || fullText.includes("agent");
-          if (activeCategory === "commands")
-            return (
-              tagNames.includes("commands") || fullText.includes("command")
-            );
-          if (activeCategory === "share-image")
-            return (
-              tagNames.includes("share image") ||
-              b.content.type === BookmarkTypes.ASSET ||
-              /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
-            );
-          if (activeCategory === "code-tech")
-            return (
-              tagNames.includes("code & tech") ||
-              /(github|stack|dev\.to|npm|code)/i.test(fullText)
-            );
-          if (activeCategory === "video")
-            return (
-              tagNames.includes("video") ||
-              /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
-            );
-          if (activeCategory === "article-blog")
-            return (
-              tagNames.includes("article & blog") ||
-              /(medium|substack|blog|article)/i.test(fullText)
-            );
-          if (activeCategory === "social-thread")
-            return (
-              tagNames.includes("social & thread") ||
-              /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
-            );
-          return true;
-        });
-      }
+      result = result.filter((b) =>
+        isBookmarkInCategory(b, activeCategory, customCategories),
+      );
     }
 
     if (searchQuery.trim()) {
