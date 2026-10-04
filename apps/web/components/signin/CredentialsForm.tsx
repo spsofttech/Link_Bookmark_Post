@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { signIn } from "@/lib/auth/client";
 import { useClientConfig } from "@/lib/clientConfig";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, Eye, EyeOff, Lock } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Lock, ShieldAlert } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -237,7 +237,7 @@ export default function CredentialsForm({
         </form>
       </Form>
 
-      <div className="pt-1 text-center">
+      <div className="space-y-3 pt-1 text-center">
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           {onSwitchTab ? (
@@ -257,6 +257,16 @@ export default function CredentialsForm({
             </Link>
           )}
         </p>
+
+        <div className="border-t border-slate-800/60 pt-3">
+          <Link
+            href="/admin/suite"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3.5 py-2 text-xs font-bold text-purple-400 transition-all hover:bg-purple-500/20 hover:text-purple-300"
+          >
+            <ShieldAlert className="size-4 text-purple-400" />
+            <span>⚡ Go to Admin Suite & Testing</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

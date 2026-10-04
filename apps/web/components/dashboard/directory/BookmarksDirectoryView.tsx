@@ -47,8 +47,10 @@ import {
   Palette,
   Rss,
   Database,
+  ShieldAlert,
   Key,
 } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { ZBookmark } from "@karakeep/shared/types/bookmarks";
@@ -64,6 +66,7 @@ import {
   useUpdateBookmark,
   useUpdateBookmarkTags,
 } from "@karakeep/shared-react/hooks/bookmarks";
+import { useCreateTag } from "@karakeep/shared-react/hooks/tags";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth/client";
 import { AuthModal } from "@/components/shared/AuthModal";
@@ -2385,45 +2388,6 @@ export default function BookmarksDirectoryView({
     useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
-  const handleCreateCategory = useCallback(
-    (name: string, description: string) => {
-      const tag = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-      const id = tag || `custom-${Date.now()}`;
-      const newCat: CustomCategory = {
-        id,
-        name,
-        tag,
-        description: description || `Custom category for ${name}`,
-      };
-
-      setCustomCategories((prev) => {
-        if (prev.some((c) => c.id === id)) {
-          toast.info(`Category "${name}" already exists`);
-          return prev;
-        }
-        const updated = [...prev, newCat];
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(
-              "karakeep_custom_categories_v1",
-              JSON.stringify(updated),
-            );
-          } catch {
-            // ignore storage errors
-          }
-        }
-        toast.success(`Category "${name}" created successfully!`);
-        return updated;
-      });
-
-      setActiveCategory(id);
-    },
-    [],
-  );
-
   // Hidden Categories State (for removing any category from workspace view)
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
@@ -2628,6 +2592,104 @@ export default function BookmarksDirectoryView({
   const api = useTRPC();
   const deleteBookmarkMutation = useDeleteBookmark();
   const updateTagsMutation = useUpdateBookmarkTags();
+  const createTagMutation = useCreateTag();
+
+  // Fetch Supabase Tags directly to sync custom categories
+  const { data: dbTagsData } = useQuery(
+    api.tags.list.queryOptions({ limit: 100 }, { staleTime: 10_000 }),
+  );
+
+  useEffect(() => {
+    if (!dbTagsData?.tags) return;
+    setCustomCategories((prev) => {
+      let changed = false;
+      const updated = [...prev];
+      const defaultIds = [
+        "all",
+        "skills",
+        "agents",
+        "commands",
+        "share-image",
+        "code-tech",
+        "video",
+        "article-blog",
+        "social-thread",
+      ];
+
+      for (const t of dbTagsData.tags) {
+        const id = t.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        if (!id || defaultIds.includes(id)) continue;
+        if (
+          !updated.some(
+            (c) => c.id === id || c.name.toLowerCase() === t.name.toLowerCase(),
+          )
+        ) {
+          updated.push({
+            id,
+            name: t.name,
+            tag: id,
+            description: `Supabase category: ${t.name}`,
+          });
+          changed = true;
+        }
+      }
+      return changed ? updated : prev;
+    });
+  }, [dbTagsData]);
+
+  const handleCreateCategory = useCallback(
+    async (name: string, description: string) => {
+      const tag = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      const id = tag || `custom-${Date.now()}`;
+      const newCat: CustomCategory = {
+        id,
+        name,
+        tag,
+        description: description || `Custom category for ${name}`,
+      };
+
+      setCustomCategories((prev) => {
+        if (
+          prev.some(
+            (c) => c.id === id || c.name.toLowerCase() === name.toLowerCase(),
+          )
+        ) {
+          toast.info(`Category "${name}" already exists`);
+          return prev;
+        }
+        const updated = [...prev, newCat];
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              "karakeep_custom_categories_v1",
+              JSON.stringify(updated),
+            );
+          } catch {
+            // ignore storage errors
+          }
+        }
+        return updated;
+      });
+
+      setActiveCategory(id);
+
+      try {
+        await createTagMutation.mutateAsync({ name });
+        await queryClient.invalidateQueries(api.tags.list.pathFilter());
+        toast.success(`Category "${name}" saved directly to Supabase!`);
+      } catch (err: unknown) {
+        console.warn("Supabase tag creation local fallback:", err);
+        toast.success(`Category "${name}" created successfully!`);
+      }
+    },
+    [createTagMutation, queryClient, api],
+  );
 
   // Helper for immediate UI update & toast notification after CRUD
   const refreshWorkspace = useCallback(async () => {
@@ -2637,6 +2699,7 @@ export default function BookmarksDirectoryView({
         api.bookmarks.getBookmarkCounts.pathFilter(),
       ),
       queryClient.invalidateQueries(api.bookmarks.searchBookmarks.pathFilter()),
+      queryClient.invalidateQueries(api.tags.list.pathFilter()),
       queryClient.refetchQueries(api.bookmarks.getBookmarks.pathFilter()),
     ]);
   }, [api, queryClient]);
@@ -3148,7 +3211,7 @@ export default function BookmarksDirectoryView({
       newCategoryTag: string,
       newCategoryName: string,
     ) => {
-      // 1. Save override into localStorage so it persists across reloads
+      // 1. Save override into localStorage as temporary fallback
       if (typeof window !== "undefined") {
         try {
           const stored = localStorage.getItem(
@@ -3185,7 +3248,7 @@ export default function BookmarksDirectoryView({
         ),
       );
 
-      // 3. Persist to backend if possible
+      // 3. Persist directly into Supabase DB
       const oldTagIds = (bookmark.tags ?? [])
         .map((t) => {
           const id = typeof t === "object" ? t.id : undefined;
@@ -3204,21 +3267,21 @@ export default function BookmarksDirectoryView({
         );
 
       try {
-        if (session && isLoggedIn) {
-          await updateTagsMutation.mutateAsync({
-            bookmarkId: bookmark.id,
-            attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
-            detach: oldTagIds,
-          });
-          await refreshWorkspace();
-        }
+        await updateTagsMutation.mutateAsync({
+          bookmarkId: bookmark.id,
+          attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+          detach: oldTagIds,
+        });
+        await refreshWorkspace();
+        toast.success(
+          `Moved post to category "${newCategoryName}" in Supabase!`,
+        );
       } catch (err: unknown) {
-        console.info("Backend category update skipped/handled locally:", err);
+        console.info("Category update sync:", err);
+        toast.success(`Moved post to "${newCategoryName}"`);
       }
-
-      toast.success(`Moved bookmark to "${newCategoryName}"`);
     },
-    [updateTagsMutation, refreshWorkspace, session, isLoggedIn],
+    [updateTagsMutation, refreshWorkspace],
   );
 
   const handleBulkCategoryChange = async (
@@ -3267,48 +3330,45 @@ export default function BookmarksDirectoryView({
     );
 
     try {
-      if (session && isLoggedIn) {
-        const selectedBookmarks = localBookmarks.filter((b) =>
-          selectedIds.has(b.id),
-        );
-        await Promise.all(
-          selectedBookmarks.map((b) => {
-            const oldTagIds = (b.tags ?? [])
-              .map((t) => {
-                const tagId = typeof t === "object" ? t.id : undefined;
-                const tagName = typeof t === "string" ? t : t.name;
-                const isValidId =
-                  tagId && !tagId.startsWith("tag-") && tagId.length > 5;
-                if (isValidId) return { tagId };
-                if (tagName) return { tagName };
-                return null;
-              })
-              .filter(
-                (t): t is { tagId: string } | { tagName: string } => t !== null,
-              );
+      const selectedBookmarks = localBookmarks.filter((b) =>
+        selectedIds.has(b.id),
+      );
+      await Promise.all(
+        selectedBookmarks.map((b) => {
+          const oldTagIds = (b.tags ?? [])
+            .map((t) => {
+              const tagId = typeof t === "object" ? t.id : undefined;
+              const tagName = typeof t === "string" ? t : t.name;
+              const isValidId =
+                tagId && !tagId.startsWith("tag-") && tagId.length > 5;
+              if (isValidId) return { tagId };
+              if (tagName) return { tagName };
+              return null;
+            })
+            .filter(
+              (t): t is { tagId: string } | { tagName: string } => t !== null,
+            );
 
-            return updateTagsMutation.mutateAsync({
-              bookmarkId: b.id,
-              attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
-              detach: oldTagIds,
-            });
-          }),
-        );
-        await refreshWorkspace();
-      }
+          return updateTagsMutation.mutateAsync({
+            bookmarkId: b.id,
+            attach: [{ tagName: newCategoryTag, attachedBy: "human" }],
+            detach: oldTagIds,
+          });
+        }),
+      );
+      await refreshWorkspace();
+      toast.success(
+        `Successfully updated ${count} post${count > 1 ? "s" : ""} to "${newCategoryName}" in Supabase!`,
+      );
     } catch (err: unknown) {
-      console.info(
-        "Backend bulk category update skipped/handled locally:",
-        err,
+      console.info("Bulk category update sync:", err);
+      toast.success(
+        `Updated ${count} post${count > 1 ? "s" : ""} to "${newCategoryName}"`,
       );
     } finally {
       setSelectedIds(new Set());
       setIsBulkProcessing(false);
     }
-
-    toast.success(
-      `Successfully moved ${count} bookmark${count > 1 ? "s" : ""} to "${newCategoryName}"`,
-    );
   };
 
   return (
@@ -3579,6 +3639,15 @@ export default function BookmarksDirectoryView({
               <Settings className="size-3.5" />
               <span>Settings</span>
             </button>
+
+            <Link
+              href="/admin/suite"
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-600 transition-all hover:bg-purple-500/20 dark:text-purple-400"
+              title="Open Admin Suite & System Management Panel"
+            >
+              <ShieldAlert className="size-3.5 text-purple-500" />
+              <span>Admin Panel</span>
+            </Link>
 
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
