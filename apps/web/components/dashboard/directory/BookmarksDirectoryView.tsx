@@ -346,14 +346,105 @@ function getBookmarkTagNames(b: unknown): string[] {
 
     if (rawTag && rawTag.trim()) {
       const norm = normalizeTagName(rawTag);
-      if (norm) rawTags.push(norm);
+      if (norm && !rawTags.includes(norm)) {
+        rawTags.push(norm);
+      }
       const lowerRaw = rawTag.trim().toLowerCase();
-      if (lowerRaw && lowerRaw !== norm) {
+      if (lowerRaw && !rawTags.includes(lowerRaw)) {
         rawTags.push(lowerRaw);
       }
     }
   }
-  return Array.from(new Set(rawTags));
+  return rawTags;
+}
+
+function getPostCategoryId(
+  b: unknown,
+  customCategories: CustomCategory[] = [],
+): string {
+  if (!b || typeof b !== "object") return "uncategorized";
+  const bObj = b as Record<string, unknown>;
+
+  // 1. Direct explicit category override check (if user manually set category)
+  const explicitCat = String(
+    bObj.categoryId || bObj.category || "",
+  ).toLowerCase();
+  if (
+    explicitCat &&
+    explicitCat !== "uncategorized" &&
+    explicitCat !== "general"
+  ) {
+    const normExp = normalizeTagName(explicitCat);
+    const expId = normExp.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (expId) return expId;
+  }
+
+  // 2. Inspect tags on the bookmark
+  const rawTagNames = getBookmarkTagNames(b);
+  if (rawTagNames.length === 0) return "uncategorized";
+
+  // Custom category map for fast lookup
+  const customCatMap = new Map<string, string>();
+  for (const c of customCategories) {
+    customCatMap.set(c.id.toLowerCase(), c.id);
+    customCatMap.set(c.tag.toLowerCase(), c.id);
+    customCatMap.set(c.name.toLowerCase(), c.id);
+  }
+
+  // Built-in category tags map
+  const builtinMap: Record<string, string> = {
+    skills: "skills",
+    skill: "skills",
+    agents: "agents",
+    agent: "agents",
+    commands: "commands",
+    command: "commands",
+    "share image": "share-image",
+    "share-image": "share-image",
+    image: "share-image",
+    "code & tech": "code-tech",
+    "code-tech": "code-tech",
+    code: "code-tech",
+    tech: "code-tech",
+    video: "video",
+    "article & blog": "article-blog",
+    "article-blog": "article-blog",
+    article: "article-blog",
+    blog: "article-blog",
+    "social & thread": "social-thread",
+    "social-thread": "social-thread",
+    social: "social-thread",
+    thread: "social-thread",
+  };
+
+  // Phase A: First check for specific non-generic tags (skipping generic "website" / "general")
+  for (const tag of rawTagNames) {
+    const norm = normalizeTagName(tag);
+    if (
+      !norm ||
+      norm === "website" ||
+      norm === "general" ||
+      norm === "uncategorized"
+    )
+      continue;
+
+    const catId = norm.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (customCatMap.has(norm)) return customCatMap.get(norm)!;
+    if (customCatMap.has(catId)) return customCatMap.get(catId)!;
+    if (builtinMap[norm]) return builtinMap[norm];
+    if (catId) return catId;
+  }
+
+  // Phase B: Fallback to generic tags (e.g. "website") if no specific tag was matched
+  for (const tag of rawTagNames) {
+    const norm = normalizeTagName(tag);
+    const catId = norm.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (norm === "website" || catId === "website") return "website";
+    if (builtinMap[norm]) return builtinMap[norm];
+    if (catId) return catId;
+  }
+
+  return "uncategorized";
 }
 
 function isBookmarkInCategory(
@@ -364,112 +455,8 @@ function isBookmarkInCategory(
   if (!b || typeof b !== "object") return false;
   if (categoryId === "all") return true;
 
-  const bObj = b as Record<string, unknown>;
-  const tagNames = getBookmarkTagNames(b);
-
-  const title = String(
-    (bObj.title as string) ||
-      ((bObj.content as Record<string, unknown>)?.title as string) ||
-      "",
-  ).toLowerCase();
-  const summary = String(bObj.summary || bObj.note || "").toLowerCase();
-  const url = String(
-    (bObj.url as string) ||
-      ((bObj.content as Record<string, unknown>)?.url as string) ||
-      ((bObj.content as Record<string, unknown>)?.sourceUrl as string) ||
-      "",
-  ).toLowerCase();
-  const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
-
-  const rawCat = String(bObj.categoryId || bObj.category || "").toLowerCase();
-  const normCat = normalizeTagName(rawCat);
-
-  // 1. Check custom category definitions
-  const customMatch = customCategories.find((c) => c.id === categoryId);
-  if (customMatch) {
-    const cTag = customMatch.tag.toLowerCase();
-    const cName = customMatch.name.toLowerCase();
-    const cId = customMatch.id.toLowerCase();
-
-    return (
-      tagNames.includes(cTag) ||
-      tagNames.includes(cName) ||
-      tagNames.includes(cId) ||
-      normCat === cId ||
-      normCat === cTag ||
-      normCat === cName ||
-      rawCat === cId ||
-      rawCat === cTag ||
-      rawCat === cName
-    );
-  }
-
-  // 2. Default built-in categories
-  switch (categoryId) {
-    case "skills":
-      return (
-        tagNames.includes("skills") ||
-        tagNames.includes("skill") ||
-        fullText.includes("skill")
-      );
-    case "agents":
-      return (
-        tagNames.includes("agents") ||
-        tagNames.includes("agent") ||
-        fullText.includes("agent")
-      );
-    case "commands":
-      return (
-        tagNames.includes("commands") ||
-        tagNames.includes("command") ||
-        fullText.includes("command")
-      );
-    case "share-image":
-      return (
-        tagNames.includes("share image") ||
-        tagNames.includes("share-image") ||
-        tagNames.includes("image") ||
-        (bObj.content as Record<string, unknown> | undefined)?.type ===
-          BookmarkTypes.ASSET ||
-        /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
-      );
-    case "code-tech":
-      return (
-        tagNames.includes("code & tech") ||
-        tagNames.includes("code-tech") ||
-        tagNames.includes("code") ||
-        /(github|stack|dev\.to|npm|code)/i.test(fullText)
-      );
-    case "video":
-      return (
-        tagNames.includes("video") ||
-        /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
-      );
-    case "article-blog":
-      return (
-        tagNames.includes("article & blog") ||
-        tagNames.includes("article-blog") ||
-        tagNames.includes("article") ||
-        tagNames.includes("blog") ||
-        /(medium|substack|blog|article)/i.test(fullText)
-      );
-    case "social-thread":
-      return (
-        tagNames.includes("social & thread") ||
-        tagNames.includes("social-thread") ||
-        tagNames.includes("social") ||
-        tagNames.includes("thread") ||
-        /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
-      );
-    default: {
-      const normCatId = categoryId.toLowerCase();
-      return (
-        tagNames.includes(normCatId) ||
-        normCat === normCatId ||
-        rawCat === normCatId
-      );
-    }
-  }
+  const postCatId = getPostCategoryId(b, customCategories);
+  return postCatId === categoryId.toLowerCase();
 }
 
 // ─── Create Category Dialog Modal ──────────────────────────────────────────
@@ -767,14 +754,24 @@ function getPlatformInfo(url: string | null | undefined) {
 }
 
 // ─── Single card transform ───────────────────────────────────────────────────
-function transformBookmark(b: ZBookmark, index: number) {
+function transformBookmark(
+  b: ZBookmark,
+  index: number,
+  customCategories: CustomCategory[] = [],
+) {
   const title = getBookmarkTitle(b) || "Untitled Post";
   const summary =
     b.summary ||
     b.note ||
     (b.content.type === BookmarkTypes.LINK ? b.content.description : "") ||
     "Bookmark post.";
-  const categoryTag = b.tags?.[0]?.name || "general";
+
+  const catId = getPostCategoryId(b, customCategories);
+  const matchedCustom = customCategories.find((c) => c.id === catId);
+  const categoryTag = matchedCustom
+    ? matchedCustom.name
+    : catId.charAt(0).toUpperCase() + catId.slice(1).replace(/-/g, " ");
+
   const statsCount = Math.floor(Math.abs(Math.sin(index + 1) * 35000)) + 5000;
   const rawUrl = getSourceUrl(b);
   const url = rawUrl || "";
@@ -3002,24 +2999,11 @@ export default function BookmarksDirectoryView({
     }
 
     for (const b of localBookmarks) {
-      if (isBookmarkInCategory(b, "skills", customCategories)) stats.skills++;
-      if (isBookmarkInCategory(b, "agents", customCategories)) stats.agents++;
-      if (isBookmarkInCategory(b, "commands", customCategories))
-        stats.commands++;
-      if (isBookmarkInCategory(b, "share-image", customCategories))
-        stats["share-image"]++;
-      if (isBookmarkInCategory(b, "code-tech", customCategories))
-        stats["code-tech"]++;
-      if (isBookmarkInCategory(b, "video", customCategories)) stats.video++;
-      if (isBookmarkInCategory(b, "article-blog", customCategories))
-        stats["article-blog"]++;
-      if (isBookmarkInCategory(b, "social-thread", customCategories))
-        stats["social-thread"]++;
-
-      for (const cust of customCategories) {
-        if (isBookmarkInCategory(b, cust.id, customCategories)) {
-          stats[cust.id]++;
-        }
+      const catId = getPostCategoryId(b, customCategories);
+      if (stats[catId] !== undefined) {
+        stats[catId]++;
+      } else {
+        stats[catId] = 1;
       }
     }
 
@@ -3278,8 +3262,9 @@ export default function BookmarksDirectoryView({
 
   // Memoised transform for visible items
   const displayItems = useMemo(
-    () => visibleBookmarks.map((b, i) => transformBookmark(b, i)),
-    [visibleBookmarks],
+    () =>
+      visibleBookmarks.map((b, i) => transformBookmark(b, i, customCategories)),
+    [visibleBookmarks, customCategories],
   );
 
   // ── Multi-selection handlers ──────────────────────────────────────────────
