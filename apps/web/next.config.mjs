@@ -6,6 +6,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   output: "standalone",
   outputFileTracingIncludes: {
     "/**": ["./public/db.db", "./db.db"],

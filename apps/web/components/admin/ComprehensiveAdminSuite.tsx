@@ -225,14 +225,22 @@ export default function ComprehensiveAdminSuite() {
   );
 
   // Admin Separate Authentication State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(
-    () => {
-      if (typeof window !== "undefined") {
-        return sessionStorage.getItem("karakeep_admin_authed") === "true";
+  const [isAdminAuthenticated, setIsAdminAuthenticated] =
+    useState<boolean>(false);
+  const [adminUserEmail, setAdminUserEmail] =
+    useState<string>("admin@karakeep.com");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (sessionStorage.getItem("karakeep_admin_authed") === "true") {
+        setIsAdminAuthenticated(true);
       }
-      return false;
-    },
-  );
+      const user = sessionStorage.getItem("karakeep_admin_user");
+      if (user) {
+        setAdminUserEmail(user);
+      }
+    }
+  }, []);
 
   const [adminLoginEmail, setAdminLoginEmail] = useState("admin@karakeep.com");
   const [adminLoginPassword, setAdminLoginPassword] = useState("admin123");
@@ -652,11 +660,8 @@ export default function ComprehensiveAdminSuite() {
           </h3>
           <p className="text-xs text-muted-foreground">
             Authenticated as{" "}
-            <strong className="text-foreground">
-              {sessionStorage.getItem("karakeep_admin_user") ||
-                "admin@karakeep.com"}
-            </strong>{" "}
-            • Full Control
+            <strong className="text-foreground">{adminUserEmail}</strong> • Full
+            Control
           </p>
         </div>
 
