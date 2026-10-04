@@ -48,7 +48,6 @@ import {
   Rss,
   Database,
   Key,
-  Globe,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -69,9 +68,8 @@ import { toast } from "sonner";
 import { useSession } from "@/lib/auth/client";
 import { AuthModal } from "@/components/shared/AuthModal";
 import { SubscriptionModal } from "@/components/shared/SubscriptionModal";
-import ComprehensiveAdminSuite from "@/components/admin/ComprehensiveAdminSuite";
 import { UserSupportSection } from "@/components/shared/UserSupportSection";
-import { Crown, Shield, LifeBuoy } from "lucide-react";
+import { Crown, LifeBuoy } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1366,8 +1364,8 @@ const BookmarkCardItem = memo(function BookmarkCardItem({
 const SettingsModal = memo(function SettingsModal({
   isOpen,
   onClose,
-  customCategories,
-  setCustomCategories,
+  customCategories: _customCategories,
+  setCustomCategories: _setCustomCategories,
   onOpenCreateCategoryModal,
   bookmarks,
   hideAdminPosts,
@@ -1600,11 +1598,6 @@ const SettingsModal = memo(function SettingsModal({
       id: "subscription",
       label: "Subscription & Pro",
       icon: <Crown className="size-4 text-amber-500" />,
-    },
-    {
-      id: "admin",
-      label: "Admin Control Panel",
-      icon: <Shield className="size-4 text-purple-500" />,
     },
     {
       id: "support",
@@ -1965,9 +1958,6 @@ const SettingsModal = memo(function SettingsModal({
                 </div>
               </div>
             )}
-
-            {/* 4. Admin Suite */}
-            {activeTab === "admin" && <ComprehensiveAdminSuite />}
 
             {/* 5. User Support */}
             {activeTab === "support" && <UserSupportSection />}
