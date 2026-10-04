@@ -2594,51 +2594,113 @@ export default function BookmarksDirectoryView({
   const updateTagsMutation = useUpdateBookmarkTags();
   const createTagMutation = useCreateTag();
 
-  // Fetch Supabase Tags directly to sync custom categories
+  // Fetch Supabase Tags & Counts directly to sync custom categories
   const { data: dbTagsData } = useQuery(
     api.tags.list.queryOptions({ limit: 100 }, { staleTime: 10_000 }),
   );
 
+  // ── Real Supabase counts (fetched once, not paginated) ────────────────────
+  const { data: dbCounts } = useQuery(
+    api.bookmarks.getBookmarkCounts.queryOptions(undefined, {
+      staleTime: 30_000,
+      enabled: Boolean(session),
+    }),
+  );
+
   useEffect(() => {
-    if (!dbTagsData?.tags) return;
+    const allTagNames = new Set<string>();
+
+    if (dbTagsData?.tags) {
+      for (const t of dbTagsData.tags) {
+        if (t.name?.trim()) allTagNames.add(t.name.trim());
+      }
+    }
+
+    if (dbCounts?.perTag) {
+      for (const pt of dbCounts.perTag) {
+        if (pt.tagName?.trim()) allTagNames.add(pt.tagName.trim());
+      }
+    }
+
+    if (localBookmarks) {
+      for (const b of localBookmarks) {
+        if (b.tags) {
+          for (const t of b.tags) {
+            const tagName = typeof t === "string" ? t : t?.name;
+            if (tagName?.trim()) allTagNames.add(tagName.trim());
+          }
+        }
+      }
+    }
+
+    if (allTagNames.size === 0) return;
+
     setCustomCategories((prev) => {
       let changed = false;
       const updated = [...prev];
-      const defaultIds = [
+
+      const defaultCategoryNormalizedNames = new Set([
         "all",
         "skills",
+        "skill",
         "agents",
+        "agent",
         "commands",
+        "command",
         "share-image",
+        "share image",
+        "image",
         "code-tech",
+        "code & tech",
+        "code",
+        "tech",
         "video",
         "article-blog",
+        "article & blog",
+        "article",
+        "blog",
         "social-thread",
-      ];
+        "social & thread",
+        "social",
+        "thread",
+      ]);
 
-      for (const t of dbTagsData.tags) {
-        const id = t.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-        if (!id || defaultIds.includes(id)) continue;
-        if (
-          !updated.some(
-            (c) => c.id === id || c.name.toLowerCase() === t.name.toLowerCase(),
-          )
-        ) {
+      for (const rawName of allTagNames) {
+        const normName = rawName.toLowerCase();
+        if (defaultCategoryNormalizedNames.has(normName)) continue;
+
+        const id = normName.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        if (!id) continue;
+
+        const alreadyExists = updated.some(
+          (c) => c.id === id || c.name.toLowerCase() === normName,
+        );
+
+        if (!alreadyExists) {
           updated.push({
             id,
-            name: t.name,
-            tag: id,
-            description: `Supabase category: ${t.name}`,
+            name: rawName,
+            tag: normName,
+            description: `Category: ${rawName}`,
           });
           changed = true;
         }
       }
+
+      if (changed && typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            "karakeep_custom_categories_v1",
+            JSON.stringify(updated),
+          );
+        } catch {
+          // ignore storage errors
+        }
+      }
+
       return changed ? updated : prev;
     });
-  }, [dbTagsData]);
+  }, [dbTagsData, dbCounts, localBookmarks]);
 
   const handleCreateCategory = useCallback(
     async (name: string, description: string) => {
@@ -2704,14 +2766,6 @@ export default function BookmarksDirectoryView({
     ]);
   }, [api, queryClient]);
 
-  // ── Real Supabase counts (fetched once, not paginated) ────────────────────
-  const { data: dbCounts } = useQuery(
-    api.bookmarks.getBookmarkCounts.queryOptions(undefined, {
-      staleTime: 30_000,
-      enabled: Boolean(session),
-    }),
-  );
-
   // Dynamic Category Options combined with custom categories
   const categoryOptions: CategoryOption[] = useMemo(() => {
     const customOptions: CategoryOption[] = customCategories.map((c) => ({
@@ -2742,17 +2796,13 @@ export default function BookmarksDirectoryView({
     }
 
     for (const b of localBookmarks) {
-      const tagNames = (b.tags ?? [])
-        .map((t) => {
-          if (typeof t === "string") return (t as string).toLowerCase();
+      const tagNames: string[] = ((b.tags as unknown[]) ?? [])
+        .map((t: unknown): string => {
+          if (typeof t === "string") return t.toLowerCase();
           if (typeof t === "object" && t !== null) {
-            return (
-              (t as { name?: string; tagName?: string; label?: string }).name ||
-              (t as { name?: string; tagName?: string; label?: string })
-                .tagName ||
-              (t as { name?: string; tagName?: string; label?: string })
-                .label ||
-              ""
+            const obj = t as Record<string, unknown>;
+            return String(
+              obj.name || obj.tagName || obj.label || "",
             ).toLowerCase();
           }
           return "";
@@ -2764,35 +2814,66 @@ export default function BookmarksDirectoryView({
       const url = (getSourceUrl(b) ?? "").toLowerCase();
       const fullText = `${title} ${summary} ${url} ${tagNames.join(" ")}`;
 
-      if (tagNames.includes("skills") || fullText.includes("skill"))
+      if (
+        tagNames.some((t) => t.includes("skill")) ||
+        fullText.includes("skill")
+      )
         stats.skills++;
-      if (tagNames.includes("agents") || fullText.includes("agent"))
+      if (
+        tagNames.some((t) => t.includes("agent")) ||
+        fullText.includes("agent")
+      )
         stats.agents++;
-      if (tagNames.includes("commands") || fullText.includes("command"))
+      if (
+        tagNames.some((t) => t.includes("command")) ||
+        fullText.includes("command")
+      )
         stats.commands++;
       if (
-        tagNames.includes("share image") ||
+        tagNames.some(
+          (t) =>
+            t.includes("share image") ||
+            t.includes("share-image") ||
+            t.includes("image"),
+        ) ||
         b.content.type === BookmarkTypes.ASSET ||
         /\.(png|jpg|jpeg|gif|webp|svg)/i.test(url)
       )
         stats["share-image"]++;
       if (
-        tagNames.includes("code & tech") ||
+        tagNames.some(
+          (t) =>
+            t.includes("code & tech") ||
+            t.includes("code-tech") ||
+            t.includes("code"),
+        ) ||
         /(github|stack|dev\.to|npm|code)/i.test(fullText)
       )
         stats["code-tech"]++;
       if (
-        tagNames.includes("video") ||
+        tagNames.some((t) => t.includes("video")) ||
         /(youtube|youtu|vimeo|tiktok|video|\.mp4)/i.test(fullText)
       )
         stats.video++;
       if (
-        tagNames.includes("article & blog") ||
+        tagNames.some(
+          (t) =>
+            t.includes("article & blog") ||
+            t.includes("article-blog") ||
+            t.includes("article") ||
+            t.includes("blog"),
+        ) ||
         /(medium|substack|blog|article)/i.test(fullText)
       )
         stats["article-blog"]++;
       if (
-        tagNames.includes("social & thread") ||
+        tagNames.some(
+          (t) =>
+            t.includes("social & thread") ||
+            t.includes("social-thread") ||
+            t.includes("social") ||
+            t.includes("thread"),
+        ) ||
         /(twitter|x\.com|reddit|linkedin)/i.test(fullText)
       )
         stats["social-thread"]++;
@@ -2812,7 +2893,14 @@ export default function BookmarksDirectoryView({
         const matchesTag =
           tagNames.includes(cTag) ||
           tagNames.includes(cName) ||
-          tagNames.includes(cId);
+          tagNames.includes(cId) ||
+          tagNames.some(
+            (t) =>
+              t === cTag ||
+              t === cName ||
+              t.includes(cTag) ||
+              t.includes(cName),
+          );
 
         if (matchesTag || bCat === cId || bCat === cTag || bCat === cName) {
           stats[cust.id]++;
@@ -2821,7 +2909,7 @@ export default function BookmarksDirectoryView({
     }
 
     if (dbCounts) {
-      stats.all = dbCounts.total;
+      stats.all = Math.max(stats.all, dbCounts.total);
       const dbTagMap = new Map<string, number>();
       for (const { tagName, count } of dbCounts.perTag) {
         dbTagMap.set(tagName.toLowerCase(), count);
@@ -2849,6 +2937,16 @@ export default function BookmarksDirectoryView({
         stats["social-thread"],
         dbMax(["social & thread", "social-thread", "social", "thread"]),
       );
+
+      for (const cust of customCategories) {
+        const cKeys = [
+          cust.id,
+          cust.name.toLowerCase(),
+          cust.tag.toLowerCase(),
+        ];
+        const countFromDb = dbMax(cKeys);
+        stats[cust.id] = Math.max(stats[cust.id] || 0, countFromDb);
+      }
     }
 
     return stats;
